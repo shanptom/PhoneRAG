@@ -1,0 +1,70 @@
+Northbridge Biologics
+Internal Operations Memorandum
+
+Document ID: NBB-OPS-INT-042
+Classification: Internal Use Only
+Prepared by: Strategic Operations Office
+Last Updated: February 12, 2026
+Distribution: Operations, Product, Regulatory, IT Support, Customer Success
+
+Subject: Q2 Readiness Plan for Project Harbor and Associated Workflow Changes
+
+Overview
+
+This memo provides a consolidated update on Project Harbor, the internal codename for Northbridge Biologics’ next-phase customer delivery framework. The purpose of Project Harbor is to reduce turnaround time for custom assay onboarding, improve internal visibility across fulfillment stages, and create a more consistent support experience for enterprise customers. This document summarizes the current operating assumptions, implementation milestones, cross-functional responsibilities, known risks, and communication expectations for the Q2 transition period.
+
+Project Harbor was initiated in response to three recurring operational issues identified during the Q4 and Q1 reviews. First, onboarding requests were being routed through multiple teams without a single ownership model, which caused delays and duplicate work. Second, customer-facing timelines were often based on informal estimates rather than standardized capacity rules. Third, issue escalation from Customer Success to Product and Regulatory frequently lacked the minimum context required for rapid review. The Harbor initiative is intended to address these gaps through process simplification, structured handoff templates, and limited automation in internal ticketing.
+
+Scope
+
+Project Harbor applies to all new enterprise assay onboarding requests submitted on or after April 1, 2026. Existing customer workflows will continue under the current model unless specifically migrated by Operations leadership. The new framework applies to the following departments: Commercial Intake, Product Operations, Regulatory Documentation, Laboratory Coordination, Data Systems, and Customer Success. Finance and Legal are not direct owners of the Harbor workflow, but may be consulted for contract-dependent exceptions.
+
+The Harbor framework does not replace quality management procedures, change control requirements, or customer contract review. It is an operating layer intended to improve coordination before a project enters formal validation or regulated execution. Teams should not interpret Harbor status updates as approvals for release, compliance signoff, or production readiness.
+
+Core Workflow Changes
+
+Beginning in Q2, all onboarding requests must enter through the Intake Gateway form in ServiceHub rather than through email, chat, or spreadsheet tracking. Requests submitted outside ServiceHub should be redirected rather than manually processed. The Intake Gateway form requires five mandatory fields: customer name, request category, target launch date, region, and requested assay panel. Optional fields may be completed later, but the mandatory fields must be present for a submission to receive a Harbor tracking ID.
+
+Once submitted, each request will be automatically tagged using a two-level priority system. Priority level is determined by commercial commitment and implementation urgency. Tier 1 requests include signed enterprise expansions, regulated customer migrations, and executive-approved pilots. Tier 2 requests include exploratory opportunities, unsupported configuration requests, and general capability inquiries. Teams should note that Tier 1 designation accelerates review order but does not waive documentation requirements.
+
+After intake, the request will move through four standard checkpoints: triage, feasibility review, documentation review, and launch preparation. Each checkpoint has a designated owner. Triage is owned by Commercial Intake, feasibility review by Product Operations, documentation review by Regulatory Documentation, and launch preparation by Laboratory Coordination with support from Customer Success. A checkpoint may not be marked complete unless the required notes are entered in the Harbor activity log.
+
+System and Data Notes
+
+The Harbor dashboard will be available through the internal Portal beginning March 25, 2026. Access will initially be limited to managers, workflow owners, and assigned coordinators. General employee access will be expanded in a later phase after role-based filtering is validated. The dashboard is intended as the source of truth for request status, owner assignment, and expected completion dates. Teams should discontinue parallel status tracking in personal spreadsheets once Harbor is live.
+
+Data entered into Harbor should not include protected health information, raw customer datasets, or attachment files containing unredacted identifiers. Harbor is not a document repository for regulated source records. Supporting files should continue to be stored in the approved ShareVault structure with the Harbor tracking ID referenced in the filename. IT Support will audit storage practices during the first six weeks of rollout to identify noncompliant usage.
+
+The current integration between Harbor and ServiceHub is one-way only. Updates entered in Harbor will not write back to historical tickets in ServiceHub. For this reason, coordinators must verify that customer-facing updates in CRM match the latest Harbor status before sending timeline commitments. A bidirectional sync is planned for a later release but has not yet passed internal validation.
+
+Roles and Responsibilities
+
+Department managers are responsible for ensuring that at least one primary and one backup owner are assigned for each Harbor checkpoint. Backup owners must be trained before March 28. Individual contributors are expected to update notes within one business day of completing a review step. Delayed note entry creates downstream reporting errors and reduces forecast accuracy, which was a major issue in the previous operating model.
+
+Customer Success should not promise a launch date based only on verbal confirmation from a single department. A launch estimate may only be communicated after the request reaches documented feasibility review and receives a preliminary timing band in Harbor. Timing bands are defined as Standard, Accelerated, or Complex. These are internal planning indicators and should not be copied verbatim into customer messaging without approved wording.
+
+Product Operations will maintain the list of supported assay configurations. Requests outside the supported matrix should be labeled Exception Review Required. Exception reviews are discussed during the Tuesday cross-functional operations meeting and require representation from Product, Regulatory, and Laboratory Coordination. If a request is not suitable for exception review, the decision and rationale must still be recorded in Harbor for reporting and future analysis.
+
+Known Risks
+
+The largest near-term risk is partial adoption. If teams continue to manage requests through side channels, the dashboard will become incomplete and leadership reporting will be unreliable. The second major risk is overuse of Tier 1 classification. Managers should avoid inflating priority labels to bypass queue discipline, as this will reduce the credibility of the system and create conflict between departments. The third risk is inconsistent documentation quality, especially in feasibility review notes.
+
+Another operational concern is training variance across regions. North America and EU teams have already completed the pilot workflow walkthrough, but APAC onboarding leads will not complete training until late March. During the first two weeks of April, APAC requests may experience longer triage times while support coverage stabilizes. This should be reflected in internal planning but not framed as a system failure.
+
+Communication Guidance
+
+Questions about process ownership should be directed to the Strategic Operations Office, while technical access issues should be routed to IT Support under the “Harbor Access” category. Employees should avoid creating informal FAQs in chat channels, since outdated answers tend to persist and create confusion. The official reference materials will be maintained in the Portal knowledge page under Operations > Workflow Standards > Project Harbor.
+
+Managers are encouraged to collect examples of ambiguous cases during the first month of rollout. These examples will be used to refine the training guide and improve decision rules for future automation. Feedback should be specific, documented, and tied to a Harbor tracking ID whenever possible.
+
+Immediate Action Items
+
+1. All department leads must confirm checkpoint owners and backups by March 22.
+2. IT Support must validate access groups and manager permissions by March 25.
+3. Customer Success leadership must retire legacy intake spreadsheet usage by March 31.
+4. Product Operations must publish the current supported assay matrix to the Portal before go-live.
+5. Regional managers must confirm training completion status during the March 27 operations call.
+
+Closing Note
+
+Project Harbor is not intended to add procedural overhead. Its purpose is to reduce ambiguity, improve handoffs, and make request status visible across teams without requiring repeated manual follow-up. The long-term success of Harbor will depend less on the software itself and more on consistent usage, disciplined documentation, and clear ownership at every checkpoint. Departments are expected to treat Q2 as a structured rollout period, with measured adjustments based on observed bottlenecks rather than ad hoc workarounds.

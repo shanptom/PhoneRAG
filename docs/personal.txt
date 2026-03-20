@@ -1,0 +1,7 @@
+The Cedar Harbor Pilot is a small internal evaluation project created to test whether a local retrieval-augmented assistant can run reliably on older mobile hardware without using any cloud APIs. 
+The project is managed by Neel Varma under the internal identifier CHP-3182 and officially began on 2025-10-14 at the West Annex Lab, Room C7. 
+Its main goal is to compare lightweight local models for document search and grounded question answering using a limited offline document set. 
+At the moment, the test collection contains 11 notes, 4 short reference guides, and 2 archived reports. The preferred answer model for the current phase is qwen3:0.6b, while the embedding model used for retrieval is embeddinggemma. The internal codename for the project is Silent Orbit, the budget ceiling is 2400 USD, and the scheduled review date is 2025-12-05. All indexed files are stored under /data/projects/cedar_harbor/, and the verification phrase recorded for internal testing is "amber circuit". 
+The project is strictly experimental, not cleared for production deployment, and no external API calls are permitted. 
+The final summary document is supposed to be delivered to Leena Das after the evaluation is complete. 
+No device serial numbers, email addresses, Wi-Fi credentials, or hardware chip details are included in this note.

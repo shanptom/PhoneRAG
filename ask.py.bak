@@ -1,0 +1,127 @@
+import json
+import math
+import re
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+INDEX_FILE = Path.home() / "phone-rag" / "index.json"
+EMBED_URL = "http://localhost:11434/api/embed"
+GENERATE_URL = "http://localhost:11434/api/generate"
+
+EMBED_MODEL = "embeddinggemma"
+CHAT_MODEL = "gemma3:1b"
+MIN_SCORE = 0.40
+
+def post_json(url, payload):
+    req = Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+def embed_text(text: str):
+    data = post_json(EMBED_URL, {
+        "model": EMBED_MODEL,
+        "input": text,
+        "keep_alive": 0
+    })
+    return data["embeddings"][0]
+
+def cosine_similarity(a, b):
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+def tokenize(text):
+    return set(re.findall(r"[a-z0-9]+", text.lower()))
+
+def keyword_boost(query, text):
+    q = tokenize(query)
+    t = tokenize(text)
+    overlap = q & t
+    return 0.03 * len(overlap)
+
+def retrieve(query, top_k=2):
+    records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+    qvec = embed_text(query)
+
+    scored = []
+    for rec in records:
+        emb_score = cosine_similarity(qvec, rec["embedding"])
+        lex_score = keyword_boost(query, rec["text"])
+        final_score = emb_score + lex_score
+        scored.append((final_score, emb_score, lex_score, rec))
+
+    scored.sort(reverse=True, key=lambda x: x[0])
+    return scored[:top_k]
+
+def build_prompt(query, matches):
+    context_blocks = []
+    for final_score, emb_score, lex_score, rec in matches:
+        context_blocks.append(
+            f"[Source: {rec['file']} | chunk={rec.get('chunk_id', '?')} | final={final_score:.4f}]\n{rec['text']}"
+        )
+
+    context = "\n\n".join(context_blocks)
+
+    return f"""Answer only from the context below.
+
+Rules:
+- If the answer is explicitly present, answer in one short sentence.
+- If the answer is not explicitly stated, reply exactly:
+  NOT FOUND IN DOCUMENTS
+- Do not guess.
+- Do not infer missing details.
+
+Context:
+{context}
+
+Question:
+{query}
+
+Answer:"""
+
+def main():
+    query = input("Question: ").strip()
+    if not query:
+        print("Empty question.")
+        return
+
+    matches = retrieve(query, top_k=2)
+
+    print("\nRetrieved context:\n")
+    for final_score, emb_score, lex_score, rec in matches:
+        print(f"{rec['file']} | chunk {rec.get('chunk_id', '?')} | final={final_score:.4f} | emb={emb_score:.4f} | lex={lex_score:.4f}")
+    print("-" * 40)
+
+    best_score = matches[0][0]
+    if best_score < MIN_SCORE:
+        print("\nAnswer:\n")
+        print("NOT FOUND IN DOCUMENTS")
+        return
+
+    prompt = build_prompt(query, matches)
+
+    data = post_json(GENERATE_URL, {
+        "model": CHAT_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "think": False,
+        "keep_alive": 0,
+        "options": {
+            "temperature": 0,
+            "num_predict": 40
+        }
+    })
+
+    print("\nAnswer:\n")
+    print(data["response"].strip())
+
+if __name__ == "__main__":
+    main()
