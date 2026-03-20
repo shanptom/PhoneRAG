@@ -1,0 +1,227 @@
+NEXAGEN BIOSCIENCES, INC.
+Internal Policy & Procedures Manual
+Document ID: NXG-POL-MASTER-2024
+Version: 4.2.1
+Effective Date: March 1, 2024
+Supersedes: Version 4.1.9 (January 15, 2024)
+Classification: INTERNAL USE ONLY
+Document Owner: Office of Compliance and Quality Assurance
+Review Cycle: Semi-annual
+Next Review: September 1, 2024
+
+SECTION 1: HUMAN RESOURCES POLICIES
+POL-HR-001: Employee Classification and Compensation
+NexaGen Biosciences classifies all personnel into four tiers: Tier I (Research Associates and Lab Technicians), Tier II (Senior Scientists and Bioinformatics Analysts), Tier III (Principal Investigators and Department Leads), and Tier IV (Directors, VPs, and C-suite). Compensation adjustments occur annually during the Performance Review Cycle (PRC) initiated each October.
+Effective January 2024, base salary bands are as follows:
+
+Tier I: $52,000 – $74,000 annually
+Tier II: $78,000 – $112,000 annually
+Tier III: $118,000 – $165,000 annually
+Tier IV: $170,000 and above, subject to Board approval.
+Overtime eligibility applies exclusively to Tier I employees classified as non-exempt under FLSA guidelines. Tier II and above are classified as exempt. Remote work stipends of $75/month are available to employees whose primary work location is remote for more than 15 business days per calendar month, pending approval via Form NXG-HR-Remote-07.
+POL-HR-002: Paid Time Off and Leave Entitlements
+PTO accrues at the following rates:
+
+Tier I: 15 days/year (1.25 days/month)
+Tier II: 18 days/year (1.5 days/month)
+Tier III: 22 days/year
+Tier IV: Discretionary, minimum 20 days/year
+
+PTO does not roll over beyond 10 days at fiscal year-end (December 31). Any unused PTO above the 10-day cap is forfeited and not compensable. This policy was revised in Version 4.1.9; prior versions allowed rollover up to 15 days.
+Parental leave is governed separately under POL-HR-007, which provides 16 weeks of fully paid leave for primary caregivers and 6 weeks for secondary caregivers, regardless of gender or Tier classification. Adoption events qualify on the same terms as biological birth events.
+Bereavement leave is 5 business days for immediate family (spouse, child, parent, sibling) and 3 business days for extended family. "Extended family" is defined as grandparents, grandchildren, in-laws, and domestic partners not otherwise covered as immediate family.
+
+POL-HR-004: Performance Improvement Plans and Disciplinary Action
+Performance concerns are addressed through a structured Progressive Discipline Framework (PDF) consisting of three stages:
+Stage 1 – Verbal Counseling: Documented by the direct supervisor within 5 business days of the triggering event. No formal HR involvement required at this stage.
+Stage 2 – Written Warning: Issued by HR in coordination with the supervisor. Triggers a 60-day Performance Improvement Plan (PIP). The PIP must specify at least three measurable improvement criteria with evaluation timelines.
+Stage 3 – Final Written Warning or Termination: At Stage 3, the employee is placed on a 30-day probationary extension or terminated, at the discretion of the Department Head with mandatory VP approval.
+Termination for cause (e.g., data falsification, harassment, IP theft, biosafety violations) bypasses Stages 1–2 and proceeds directly to Stage 3 or immediate dismissal. All Stage 3 actions require written sign-off from Legal.
+
+1.4.1 Addendum A — Senior Staff PIP Modifications (POL-HR-004-ADDENDUM-A)
+For Tier III and Tier IV employees, the PIP duration at Stage 2 is extended to 90 days (not 60 days as stated in the general policy). The measurable improvement criteria requirement is raised to a minimum of five criteria. A third-party executive coach engagement is mandatory, with costs borne by NexaGen up to $8,000. This addendum supersedes POL-HR-004 Section 2(b) for the duration of any Tier III/IV PIP.
+POL-HR-009: Contractor and Consultant Engagement
+Independent contractors engaged for bioinformatics or laboratory work are compensated at day rates rather than annual salaries. Standard day rates by equivalency tier:
+
+Tier I equivalent: $380–$520/day
+Tier II equivalent: $550–$780/day
+Tier III equivalent: $820–$1,200/day
+
+All contractor engagements exceeding 90 days or $50,000 in aggregate value require a formal Statement of Work (SOW) reviewed by Legal and countersigned by the relevant VP. Contractors are not eligible for PTO, parental leave, or equity grants. Contractors working on-site must complete the same biosafety orientation as full-time employees (see POL-LAB-002).
+
+SECTION 2: LABORATORY SAFETY AND PROTOCOLS
+POL-LAB-001: Biosafety Level Classification and Facility Access
+NexaGen operates research facilities across three biosafety levels (BSL):
+
+BSL-1 Facilities (Buildings A, B, G): General molecular biology, non-pathogenic E. coli strains, cell culture with non-infectious materials. Access requires completion of Lab Safety Orientation (LSO-101) and a valid NexaGen badge.
+BSL-2 Facilities (Buildings C, D, F-West Wing): Work with agents of moderate individual hazard. Access requires LSO-101 plus BSL-2 Certification (LAB-CERT-02), annual refresher training, and a supervisor-countersigned access request (Form LAB-ACCESS-02B). Personnel must log entry and exit in the electronic facility management system (FMS).
+BSL-3 Facilities (Building E, F-East Wing, and secure suites in Building H): Select agents and toxins, aerosol-transmissible pathogens. Access requires LAB-CERT-02 and LAB-CERT-03, medical clearance from Occupational Health, a two-person rule during all active work sessions, and quarterly re-certification of all personnel. Building H secure suites additionally require Division VP approval and background check on file within the past 24 months.
+
+Personnel who exit a BSL-2 or BSL-3 facility without completing the exit log procedure are subject to an immediate incident report filed under POL-LAB-008 (Incident Reporting), with mandatory supervisor notification within 2 hours. Three unlogged exits within a rolling 12-month window triggers a Stage 1 disciplinary action under POL-HR-004.
+POL-LAB-002: Personal Protective Equipment Standards
+PPE requirements vary by facility tier and task type. The following matrix applies:
+BSL-1 Minimum Standard: Lab coat, nitrile gloves (single layer), safety glasses when handling liquids.
+BSL-2 Minimum Standard: Lab coat (autoclavable), nitrile gloves (double-layered for cell culture), safety glasses, closed-toe shoes. Face shield required for all centrifuge operations and any liquid volume exceeding 250 mL.
+BSL-3 Minimum Standard: Full Tyvek suit or dedicated BSL-3 gowning (donned in anteroom), double nitrile gloves with taped wrists, N95 or higher respiratory protection (PAPR preferred), face shield, dedicated closed-toe footwear that remains in the BSL-3 anteroom. All PPE disposal follows the BSL-3 waste stream (orange-bagged, autoclaved, then incinerated).
+PPE procurement is the responsibility of the Laboratory Manager. Researchers may not bring personally purchased PPE for use in BSL-2 or BSL-3 facilities without written approval from the EHS department. The approved PPE vendor list is maintained at the NexaGen intranet portal under EHS > Approved Vendors > PPE (updated quarterly).
+POL-LAB-005: Chemical Inventory and Hazardous Waste Disposal
+All chemicals must be logged in the NexaGen Chemical Inventory Management System (CIMS) within 24 hours of receipt. CIMS is accessible at cheminventory.nexagen.internal. Each chemical entry must include: CAS number, quantity received, storage location (room and cabinet number), SDS document upload, and the name of the responsible researcher.
+Hazardous waste disposal is governed by EPA and state regulations, and NexaGen's contract with ClearWaste Solutions (Contract NXG-EHS-CWS-2022, expiry December 31, 2024). Disposal categories:
+
+Category A (Halogenated Solvents): Dedicated red-cap containers in satellite accumulation areas. 55-gallon capacity; containers must be picked up before reaching 90% fill. Pickup scheduled via ClearWaste portal, 5-business-day lead time.
+Category B (Non-Halogenated Solvents): Yellow-cap containers. Same capacity and pickup protocol as Category A.
+Category C (Aqueous Waste with Heavy Metals): White-cap containers. Segregation from Category A/B is mandatory; mixing Category A and C waste constitutes a regulatory violation requiring immediate EHS notification.
+Category D (Biohazardous Waste): Orange-bag collection, autoclave verification stamp required before transfer to main waste stream. See POL-LAB-001 for BSL-3-specific disposal.
+
+POL-LAB-008: Incident Reporting and Root Cause Analysis
+Any incident, near-miss, or unsafe condition must be reported within 4 hours of observation using the Incident Reporting System (IRS) at safety.nexagen.internal. Incidents are classified as:
+
+Level 1 (Near-Miss / No Injury): IRS report required; reviewed by Lab Manager within 5 business days.
+Level 2 (Minor Injury or Spill < 1L): IRS report required; EHS notification within 2 hours; Occupational Health assessment for any personnel involved.
+Level 3 (Significant Injury, Spill > 1L, or Regulatory Trigger Event): IRS report required; VP notification within 1 hour; external regulatory agency notification may be required (EHS determines within 4 hours). Facility section may be locked down pending investigation.
+Root Cause Analysis (RCA) is mandatory for all Level 2 and Level 3 incidents. RCA must follow the 5-Why methodology and be submitted within 10 business days of the incident. RCA reports are reviewed by the Safety Committee at its monthly meeting (second Tuesday of each month).
+
+POL-LAB-014: Authorized Absence from Active Laboratory Experiments
+Researchers engaged in time-sensitive assays (e.g., transfection windows, live-cell imaging, multi-day fermentations) must designate a Coverage Scientist before any planned absence exceeding 2 hours during an active experimental window. The Coverage Scientist designation is recorded in the Lab Notebook Management System (LNMS). Unplanned absences during active experiments must be communicated to the Lab Manager within 30 minutes via direct message on the NexaGen internal Slack workspace or by phone; email alone is not acceptable.
+
+SECTION 3: DATA GOVERNANCE AND COMPUTATIONAL RESEARCH POLICIES
+POL-DATA-001: Research Data Classification Framework
+All research data generated at or on behalf of NexaGen is classified into one of four data sensitivity tiers:
+
+Class 1 – Public: Data approved for external publication or public repository deposition (e.g., GenBank, SRA, GEO). Requires sign-off from the PI and Data Governance Officer (DGO) before deposition.
+Class 2 – Internal: Preliminary analyses, internal benchmarking results, failed experiment records. Accessible to all NexaGen employees with a valid account. Not for external sharing without DGO approval.
+Class 3 – Confidential: Proprietary assay development data, pre-publication genomics data, clinical trial data under active IND. Accessible only to personnel with project-specific authorization documented in the Project Access Registry (PAR). Requires encryption at rest (AES-256 minimum) and in transit (TLS 1.3).
+Class 4 – Restricted: Trade secrets, PII associated with human subjects research, regulatory submission dossiers. Accessible only to named individuals with DGO and Legal co-authorization. Stored exclusively on NexaGen-managed servers; no cloud storage permitted without a signed Data Processing Agreement (DPA) reviewed by Legal. Physical access to servers hosting Class 4 data requires two-person authorization.
+
+
+POL-DATA-002: Bioinformatics Pipeline Validation Standards
+All computational pipelines used to generate data supporting regulatory submissions (IND, BLA, NDA, 510(k)) must undergo formal validation before use. The validation workflow consists of three phases:
+
+Phase 1 – Analytical Validation: Pipeline is run on reference datasets with known outputs. Concordance thresholds (≥99% for variant calling, ≥95% for taxonomic classification at genus level) must be met and documented. Validation report signed by the lead bioinformatician and the DGO.
+
+Phase 2 – Operational Qualification (OQ): Pipeline is deployed in the production computational environment (NexaGen HPC Cluster, SLURM scheduler, Singularity containers). All dependencies must be containerized with pinned versions. Pipeline must complete without error on three independent test datasets drawn from the NexaGen Reference Dataset Library (RDL v2.3 or later).
+
+Phase 3 – Performance Qualification (PQ): Three production runs on actual project data, with output reviewed by an independent scientist not involved in pipeline development. Any discrepancy triggers a deviation report under POL-DATA-007.
+
+Pipeline version control is mandatory using Git; repositories must be hosted on the NexaGen GitLab instance (gitlab.nexagen.internal). Branches named main and validated are protected; direct pushes are prohibited. All changes to a validated pipeline require a new validation cycle starting from Phase 2 minimum, unless the change is classified as a Minor Modification under Change Control Form CCF-BIO-01.
+
+
+
+POL-DATA-003: Data Storage, Retention, and Backup
+Research data retention periods by class:
+
+Class 1 data: Minimum 10 years post-publication.
+Class 2 data: Minimum 5 years from date of creation.
+Class 3 data: Minimum 15 years, or 5 years post-regulatory approval (whichever is longer).
+Class 4 data: Minimum 20 years, or as specified in the applicable regulatory framework (ICH E6, 21 CFR Part 11, etc.), whichever is longer.
+All research data must be backed up to the NexaGen primary data center (DC-Primary, San Diego) and replicated to DC-Secondary (Research Triangle Park, NC) within 24 hours. Backup integrity is verified monthly using MD5 checksum comparison. Any backup failure triggers an automated alert to the IT Infrastructure team and must be resolved within 72 hours.
+
+Storage quota alerts are issued automatically at 75% and 90% of allocated project storage. At 90%, new data writes to the affected directory require DGO approval. Labs consistently exceeding quota thresholds for more than 30 consecutive days are subject to storage reallocation review by the IT Governance Committee.
+
+Sequencing data (raw FASTQ files) from Illumina, Oxford Nanopore, and MGI platforms are retained at full resolution (no compression) for the duration of the project plus 3 years. Compressed (gzip) copies may substitute after the project closure date if bit-perfect decompression is verified and documented.
+
+POL-DATA-004: Access Control and Authentication
+All NexaGen computational systems enforce Role-Based Access Control (RBAC) aligned with the data classification tiers in POL-DATA-001. Specific requirements:
+
+Multi-factor authentication (MFA): Mandatory for all systems accessing Class 3 or Class 4 data. MFA via hardware token (YubiKey, model 5 series or later) is required for Class 4. Software-based TOTP (e.g., Authy, Google Authenticator) is acceptable for Class 3.
+Password Policy: Minimum 14 characters, complexity requirements (upper, lower, numeric, special). No reuse of the last 12 passwords. 90-day rotation for accounts with access to Class 3 or 4 data; 180-day rotation for Class 1/2.
+Service Accounts: All automated pipeline service accounts must use SSH key pairs (ED25519 or RSA-4096 minimum). Passwords are prohibited for service accounts. Keys must be rotated every 180 days and stored in the NexaGen Vault instance (vault.nexagen.internal).
+Privileged Access Management (PAM): System administrators accessing production infrastructure use just-in-time (JIT) access provisioning via CyberArk. Session recordings are retained for 12 months.
+
+
+POL-DATA-005: Data Breach Notification and Incident Response
+A data breach is defined as any confirmed or suspected unauthorized access, disclosure, modification, or destruction of NexaGen research data. Upon suspicion of a breach:
+
+Immediate Actions (0–4 hours):
+
+Notify the Information Security team via the security hotline (ext. 5555 or security@nexagen.com) immediately upon suspicion.
+Do not attempt to remediate or investigate the breach independently.
+Preserve all logs and do not power down affected systems without InfoSec guidance.
+Short-Term Response (4–24 hours):
+
+InfoSec conducts initial triage. Breach confirmed or unconfirmed determination made within 8 hours.
+If confirmed: DGO and Legal notified; severity classification assigned (Class 3 breach = Severity 2; Class 4 breach = Severity 1).
+Notification Timelines:
+
+Class 3 breach (Severity 2): Internal executive notification within 24 hours of confirmation. External regulatory notification (if applicable) within 72 hours per applicable law (GDPR Art. 33, HIPAA Breach Rule, etc.).
+Class 4 breach (Severity 1): Internal executive notification within 4 hours. External regulatory notification within 72 hours. Affected individuals notified within 30 days. Clinical trial sponsors notified within 24 hours per sponsor agreement.
+Board-level breach report required for any Severity 1 event. Post-incident review must be completed within 30 days following incident closure.
+
+POL-DATA-006: Data Access Revocation Upon Employee Separation
+Upon initiation of an employee's separation (voluntary or involuntary), the following access revocation timeline applies:
+
+Immediate (Day 0 – at time of HR notification): VPN access, email, Slack, and remote desktop revoked within 2 hours of HR notification to IT.
+End of Day 1: All project-specific repository access revoked. Active compute jobs on HPC are suspended (not terminated; data preserved for 14 days for PI retrieval).
+End of Day 5: All remaining NexaGen system credentials deactivated. Physical access badge deactivated simultaneously.
+Day 30: All personally assigned storage directories archived to cold storage. A copy of the access activity log for the departing employee is sent to their former supervisor and retained for 3 years.
+For involuntary terminations-for-cause, Day 0 revocations are expanded to include physical badge deactivation and escort from premises at time of HR notification. No 14-day compute job preservation applies; jobs are terminated and data is immediately archived under DGO supervision.
+
+
+POL-DATA-007: Deviation and Change Control in Computational Research
+Any deviation from a validated pipeline or approved computational protocol must be documented using the Deviation Report Form (DRF-BIO-01) within 24 hours of the deviation occurring or being discovered. Deviations are classified as:
+
+Planned Deviation: Intentional departure from the validated method, approved in advance by the DGO and PI. Requires completion of a risk assessment (Form RA-BIO-01) prior to execution.
+Unplanned Deviation: Unintended departure, identified during or after execution. Requires immediate notification to PI and DGO. Root cause analysis (see POL-LAB-008 for RCA methodology, also applicable here) must be completed within 10 business days.
+A Planned Deviation exceeding 30 calendar days in duration or affecting more than 20% of pipeline steps automatically triggers a full re-validation per POL-DATA-002.
+
+Change Control requests for modifications to validated pipelines are submitted via the Change Control Board (CCB) portal at ccb.nexagen.internal. Minor modifications (definition: changes that do not affect algorithmic logic, reference databases, or output schema) may be approved by the DGO alone with a 5-business-day review window. Major modifications require full CCB review (biweekly meeting, second and fourth Monday of each month) plus a new Phase 2/Phase 3 validation cycle.
+
+SECTION 4: CROSS-CUTTING POLICIES AND POLICY HIERARCHY
+POL-CROSS-001: Policy Conflict Resolution
+In the event of an apparent conflict between two NexaGen policies, the following hierarchy governs:
+
+Applicable federal and state law (always supersedes internal policy)
+Regulatory agency guidance (FDA, EPA, OSHA, applicable ICH guidelines)
+Policy addenda and amendments (e.g., POL-HR-004-ADDENDUM-A supersedes the parent section on its specific topic)
+Section-level policies (e.g., POL-DATA-005 supersedes POL-DATA-001 on breach notification specifics)
+General policies and overarching frameworks
+When two same-level policies appear to conflict, the more recently dated version governs pending formal resolution by the Office of Compliance. Resolution requests must be submitted via Form NXG-COMPL-01 and are adjudicated within 15 business days.
+
+Required certifications and training completions are tracked in the NexaGen Learning Management System (LMS) at learning.nexagen.internal. Automated reminders are sent at 60 days, 30 days, and 7 days before expiry. Employees with lapsed certifications are automatically locked out of the relevant facility or system access pending renewal. Supervisors receive concurrent notifications.
+
+Certifications with cross-policy dependencies:
+
+Certification	Required by	Validity	Renewal Lead Time
+LSO-101 (Lab Safety)	POL-LAB-001	3 years	60 days
+LAB-CERT-02 (BSL-2)	POL-LAB-001	2 years	60 days
+LAB-CERT-03 (BSL-3)	POL-LAB-001	1 year	90 days
+Data Governance Awareness	POL-DATA-001	1 year	30 days
+Biosafety Cabinet Recertification	POL-LAB-002	1 year	30 days
+GCP Training (clinical staff)	POL-DATA-003	2 years	60 days
+Failure to renew LAB-CERT-03 within the 90-day renewal window (i.e., renewal not submitted before the 90-day mark) escalates to a Level 2 disciplinary action, bypassing Stage 1, due to the safety-critical nature of BSL-3 certification lapse.
+
+APPENDIX A: GLOSSARY OF TERMS
+BSL: Biosafety Level. A system of biocontainment precautions designed to isolate dangerous biological agents.
+
+CCB: Change Control Board. The governance body responsible for reviewing and approving modifications to validated computational workflows.
+
+Class [1–4]: Data sensitivity classification under POL-DATA-001. Note: "Class" in this context refers to data classification only; do not confuse with "Tier" which refers to employee classification under POL-HR-001.
+
+Coverage Scientist: A designated researcher who assumes responsibility for time-sensitive laboratory tasks during a primary researcher's absence, per POL-LAB-014.
+
+DGO: Data Governance Officer. Senior role responsible for oversight of all data classification, access control, and breach response functions.
+
+FMS: Facility Management System. Electronic entry/exit logging platform for BSL-2 and BSL-3 facilities.
+
+PAR: Project Access Registry. The authoritative record of personnel authorized to access Class 3 data for specific projects.
+
+PIP: Performance Improvement Plan. A structured 60-day (Tier I/II) or 90-day (Tier III/IV) remediation framework under POL-HR-004.
+
+RDL: Reference Dataset Library. Curated genomics reference datasets used for computational pipeline validation. Current binding version: v2.3.
+
+
+Version	Date	Author	Summary of Changes
+4.0.0	Jan 2023	Dr. A. Mehrotra	Major restructuring of data governance section; POL-DATA-001 through 007 created
+4.1.0	Jun 2023	M. Okonkwo	POL-LAB-014 added; BSL-3 renewal window changed from 60 to 90 days
+4.1.9	Jan 2024	Dr. A. Mehrotra	PTO rollover cap revised from 15 to 10 days; contractor rate bands updated
+4.2.0	Feb 2024	K. Vasquez	POL-DATA-002 Phase 2 requirement updated to RDL v2.3
+4.2.1	Mar 2024	M. Okonkwo	POL-HR-004-ADDENDUM-A formally incorporated; cross-reference table in Appendix A updated
+END OF DOCUMENT
+NXG-POL-MASTER-2024 v4.2.1 — For questions, contact compliance@nexagen.com or ext. 4400
+
+
+
+
+
+
+
