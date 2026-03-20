@@ -9,7 +9,7 @@ EMBED_URL = "http://localhost:11434/api/embed"
 GENERATE_URL = "http://localhost:11434/api/generate"
 
 EMBED_MODEL = "embeddinggemma"
-CHAT_MODEL = "qwen3:0.6b"
+CHAT_MODEL = "gemma3:1b"
 MIN_SCORE = 0.28
 EMBED_KEEP_ALIVE = 0     # unload embed model immediately to free RAM for chat
 CHAT_KEEP_ALIVE = 3600   # keep chat model loaded for 1 hour (reuse across queries)
@@ -75,11 +75,10 @@ def build_prompt(query, matches):
 
     context = "\n\n".join(context_blocks)
 
-    return f"""<context>
+    return f"""Context:
 {context}
-</context>
 
-Instructions: Answer the question using ONLY the context above. Copy the relevant phrase directly. If the answer is absent, write only: NOT FOUND
+Using ONLY the context above, answer the question. You may combine facts from multiple passages. Copy the relevant phrase directly. Keep your answer short — no more than one sentence. If the answer is not in the context, write only: NOT FOUND
 
 Question: {query}
 Answer:"""
@@ -91,7 +90,7 @@ def main():
         return
 
     records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-    matches = retrieve(query, records, top_k=3)
+    matches = retrieve(query, records, top_k=5)
 
     print("\nRetrieved context:\n")
     for final_score, emb_score, lex_score, rec in matches:
