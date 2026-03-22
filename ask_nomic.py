@@ -1,15 +1,14 @@
-import argparse
 import json
 import math
 import re
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-INDEX_FILE = Path.home() / "phone-rag" / "index.json"
+INDEX_FILE = Path.home() / "phone-rag" / "index_nomic.json"
 EMBED_URL = "http://localhost:11434/api/embed"
 GENERATE_URL = "http://localhost:11434/api/generate"
 
-EMBED_MODEL = "embeddinggemma"
+EMBED_MODEL = "nomic-embed-text-v2-moe"
 CHAT_MODEL = "gemma3:1b"
 MIN_SCORE = 0.28
 EMBED_KEEP_ALIVE = 0     # unload embed model immediately to free RAM for chat
@@ -85,11 +84,6 @@ Question: {query}
 Answer:"""
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default=CHAT_MODEL, help="Ollama chat model to use")
-    args = parser.parse_args()
-    chat_model = args.model
-
     query = input("Question: ").strip()
     if not query:
         print("Empty question.")
@@ -114,7 +108,7 @@ def main():
     req = Request(
         GENERATE_URL,
         data=json.dumps({
-            "model": chat_model,
+            "model": CHAT_MODEL,
             "prompt": prompt,
             "stream": True,
             "think": False,
