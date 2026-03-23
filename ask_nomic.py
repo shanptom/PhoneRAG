@@ -1,3 +1,4 @@
+import argparse
 import json
 import math
 import re
@@ -52,6 +53,53 @@ def keyword_boost(query, text):
     union = q | t
     return 0.15 * (len(q & t) / len(union))
 
+BROAD_KEYWORDS = {"summarize", "summary", "summarise", "overview", "outline",
+                   "main points", "key points", "recap", "brief", "briefing",
+                   "explain the file", "explain the document", "tell me about",
+                   "what is this about", "what does it say", "entire", "whole",
+                   "all about", "full"}
+
+def is_broad_query(query):
+    q_lower = query.lower()
+    for kw in BROAD_KEYWORDS:
+        if kw in q_lower:
+            return True
+    return False
+
+def find_target_file(query, records):
+    """Try to match a filename mentioned in the query. Falls back to the top-scored file."""
+    q_lower = query.lower()
+    known_files = {r["file"] for r in records}
+    for fname in known_files:
+        name_no_ext = Path(fname).stem.replace("_", " ").replace("-", " ").lower()
+        if fname.lower() in q_lower or name_no_ext in q_lower:
+            return fname
+    return None
+
+def retrieve_broad(query, records):
+    """For broad queries: get all chunks from the target file, ordered by chunk_id."""
+    target = find_target_file(query, records)
+
+    if target:
+        file_chunks = [r for r in records if r["file"] == target]
+        file_chunks.sort(key=lambda r: r.get("chunk_id", 0))
+        return [(1.0, 1.0, 0.0, r) for r in file_chunks], target
+
+    # No filename detected — use similarity to pick the best file, then return all its chunks
+    qvec = embed_text(query)
+    qnorm = math.sqrt(sum(x * x for x in qvec))
+
+    scored = []
+    for rec in records:
+        emb_score = cosine_similarity_prenorm(qvec, qnorm, rec["embedding"], rec["norm"])
+        scored.append((emb_score, rec))
+    scored.sort(reverse=True, key=lambda x: x[0])
+
+    best_file = scored[0][1]["file"]
+    file_chunks = [r for r in records if r["file"] == best_file]
+    file_chunks.sort(key=lambda r: r.get("chunk_id", 0))
+    return [(1.0, 1.0, 0.0, r) for r in file_chunks], best_file
+
 def retrieve(query, records, top_k=3):
     qvec = embed_text(query)
     qnorm = math.sqrt(sum(x * x for x in qvec))
@@ -66,7 +114,7 @@ def retrieve(query, records, top_k=3):
     scored.sort(reverse=True, key=lambda x: x[0])
     return scored[:top_k]
 
-def build_prompt(query, matches):
+def build_prompt(query, matches, broad=False):
     context_blocks = []
     for final_score, emb_score, lex_score, rec in matches:
         context_blocks.append(
@@ -75,47 +123,69 @@ def build_prompt(query, matches):
 
     context = "\n\n".join(context_blocks)
 
+    if broad:
+        return f"""Context:
+{context}
+
+Using ONLY the context above, provide a concise summary that covers all the main points. Organize by topic if appropriate. If the context is insufficient, say so.
+
+Question: {query}
+Answer:"""
+
     return f"""Context:
 {context}
 
-Using ONLY the context above, answer the question. You may combine facts from multiple passages. Copy the relevant phrase directly. Keep your answer short — no more than one sentence. If the answer is not in the context, write only: NOT FOUND
+Using ONLY the context above, answer the question. You may combine facts from multiple passages. Be thorough — explain your answer with relevant details from the context. If the answer is not in the context, write only: NOT FOUND
 
 Question: {query}
 Answer:"""
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default=CHAT_MODEL, help="Ollama chat model to use")
+    args = parser.parse_args()
+    chat_model = args.model
+
     query = input("Question: ").strip()
     if not query:
         print("Empty question.")
         return
 
     records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-    matches = retrieve(query, records, top_k=5)
+    broad = is_broad_query(query)
 
-    print("\nRetrieved context:\n")
-    for final_score, emb_score, lex_score, rec in matches:
-        print(f"{rec['file']} | chunk {rec.get('chunk_id', '?')} | final={final_score:.4f} | emb={emb_score:.4f} | lex={lex_score:.4f}")
+    if broad:
+        matches, target = retrieve_broad(query, records)
+        print(f"\n[Broad query detected — retrieving all {len(matches)} chunks from: {target}]\n")
+        for _, _, _, rec in matches:
+            print(f"  {rec['file']} | chunk {rec.get('chunk_id', '?')}")
+    else:
+        matches = retrieve(query, records, top_k=5)
+        print("\nRetrieved context:\n")
+        for final_score, emb_score, lex_score, rec in matches:
+            print(f"{rec['file']} | chunk {rec.get('chunk_id', '?')} | final={final_score:.4f} | emb={emb_score:.4f} | lex={lex_score:.4f}")
     print("-" * 40)
 
-    best_score = matches[0][0]
-    if best_score < MIN_SCORE:
-        print("\nAnswer:\n")
-        print("NOT FOUND IN DOCUMENTS")
-        return
+    if not broad:
+        best_score = matches[0][0]
+        if best_score < MIN_SCORE:
+            print("\nAnswer:\n")
+            print("NOT FOUND IN DOCUMENTS")
+            return
 
-    prompt = build_prompt(query, matches)
+    prompt = build_prompt(query, matches, broad=broad)
 
     req = Request(
         GENERATE_URL,
         data=json.dumps({
-            "model": CHAT_MODEL,
+            "model": chat_model,
             "prompt": prompt,
             "stream": True,
             "think": False,
             "keep_alive": CHAT_KEEP_ALIVE,
             "options": {
                 "temperature": 0,
-                "num_predict": 120
+                "num_predict": 512 if broad else 256
             }
         }).encode("utf-8"),
         headers={"Content-Type": "application/json"},
