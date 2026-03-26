@@ -25,12 +25,10 @@ def embed_text(text: str):
 
     return data["embeddings"][0]
 
-def cosine_similarity(a, b):
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
+def cosine_similarity_prenorm(a, norm_a, b, norm_b):
     if norm_a == 0 or norm_b == 0:
         return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
     return dot / (norm_a * norm_b)
 
 def main():
@@ -41,10 +39,11 @@ def main():
 
     records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
     qvec = embed_text(query)
+    qnorm = math.sqrt(sum(x * x for x in qvec))
 
     scored = []
     for rec in records:
-        score = cosine_similarity(qvec, rec["embedding"])
+        score = cosine_similarity_prenorm(qvec, qnorm, rec["embedding"], rec["norm"])
         scored.append((score, rec["file"], rec["text"]))
 
     scored.sort(reverse=True, key=lambda x: x[0])

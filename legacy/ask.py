@@ -39,10 +39,17 @@ def cosine_similarity_prenorm(a, norm_a, b, norm_b):
     dot = sum(x * y for x, y in zip(a, b))
     return dot / (norm_a * norm_b)
 
-def tokenize(text):
-    return set(re.findall(r"[a-z0-9]+", text.lower()))
+_TOKENIZE_RE = re.compile(r"[a-z0-9]+")
 
-STOPWORDS = {"the", "a", "an", "is", "in", "of", "to", "and", "or", "what", "how", "does", "do", "it", "its"}
+def tokenize(text):
+    return set(_TOKENIZE_RE.findall(text.lower()))
+
+STOPWORDS = {
+    "the", "a", "an", "is", "in", "of", "to", "and", "or", "what", "how",
+    "does", "do", "it", "its", "about", "from", "would", "could", "should",
+    "very", "just", "been", "have", "has", "be", "are", "was", "were",
+    "this", "that", "with", "for", "not", "but", "can", "will", "than",
+}
 
 def keyword_boost(query, text):
     q = tokenize(query) - STOPWORDS
@@ -79,7 +86,7 @@ def build_prompt(query, matches):
     return f"""Context:
 {context}
 
-Using ONLY the context above, answer the question. You may combine facts from multiple passages. Copy the relevant phrase directly. Keep your answer short — no more than one sentence. If the answer is not in the context, write only: NOT FOUND
+Using ONLY the context above, answer the question. You may combine facts from multiple passages. Be thorough — explain your answer with relevant details from the context. If the answer is not in the context, write only: NOT FOUND
 
 Question: {query}
 Answer:"""
@@ -121,7 +128,7 @@ def main():
             "keep_alive": CHAT_KEEP_ALIVE,
             "options": {
                 "temperature": 0,
-                "num_predict": 120
+                "num_predict": 256
             }
         }).encode("utf-8"),
         headers={"Content-Type": "application/json"},

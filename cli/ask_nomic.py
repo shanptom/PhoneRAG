@@ -39,10 +39,17 @@ def cosine_similarity_prenorm(a, norm_a, b, norm_b):
     dot = sum(x * y for x, y in zip(a, b))
     return dot / (norm_a * norm_b)
 
-def tokenize(text):
-    return set(re.findall(r"[a-z0-9]+", text.lower()))
+_TOKENIZE_RE = re.compile(r"[a-z0-9]+")
 
-STOPWORDS = {"the", "a", "an", "is", "in", "of", "to", "and", "or", "what", "how", "does", "do", "it", "its"}
+def tokenize(text):
+    return set(_TOKENIZE_RE.findall(text.lower()))
+
+STOPWORDS = {
+    "the", "a", "an", "is", "in", "of", "to", "and", "or", "what", "how",
+    "does", "do", "it", "its", "about", "from", "would", "could", "should",
+    "very", "just", "been", "have", "has", "be", "are", "was", "were",
+    "this", "that", "with", "for", "not", "but", "can", "will", "than",
+}
 
 def keyword_boost(query, text):
     q = tokenize(query) - STOPWORDS
@@ -76,13 +83,16 @@ def find_target_file(query, records):
             return fname
     return None
 
+MAX_BROAD_CHUNKS = 25  # cap to avoid exceeding model context window
+
 def retrieve_broad(query, records):
-    """For broad queries: get all chunks from the target file, ordered by chunk_id."""
+    """For broad queries: get chunks from the target file, ordered by chunk_id."""
     target = find_target_file(query, records)
 
     if target:
         file_chunks = [r for r in records if r["file"] == target]
         file_chunks.sort(key=lambda r: r.get("chunk_id", 0))
+        file_chunks = file_chunks[:MAX_BROAD_CHUNKS]
         return [(1.0, 1.0, 0.0, r) for r in file_chunks], target
 
     # No filename detected — use similarity to pick the best file, then return all its chunks
@@ -98,6 +108,7 @@ def retrieve_broad(query, records):
     best_file = scored[0][1]["file"]
     file_chunks = [r for r in records if r["file"] == best_file]
     file_chunks.sort(key=lambda r: r.get("chunk_id", 0))
+    file_chunks = file_chunks[:MAX_BROAD_CHUNKS]
     return [(1.0, 1.0, 0.0, r) for r in file_chunks], best_file
 
 def retrieve(query, records, top_k=3):

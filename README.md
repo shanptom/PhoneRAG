@@ -2,7 +2,7 @@
 
 A lightweight Retrieval-Augmented Generation (RAG) system designed to run entirely on an Android phone using [Termux](https://termux.dev) and [Ollama](https://ollama.com). No cloud APIs, no heavy frameworks — just Python standard library and local LLMs.
 
-Drop your `.txt` or `.pdf` files into a folder, build an index, and ask questions against your documents from the command line.
+Upload documents, build a vector index, and ask questions — all from a mobile-friendly web UI or the command line.
 
 ## How It Works
 
@@ -11,12 +11,11 @@ Drop your `.txt` or `.pdf` files into a folder, build an index, and ask question
                           |  docs/*.txt/pdf |
                           +--------+--------+
                                    |
-                           build_index.py
-                        (chunk + embed + store)
+                          chunk + embed (batched)
                                    |
                                    v
                           +--------+--------+
-                          |   index.json    |
+                          | index_nomic.json|
                           | (vector store)  |
                           +--------+--------+
                                    |
@@ -39,167 +38,180 @@ Drop your `.txt` or `.pdf` files into a folder, build an index, and ask question
 
 ### Pipeline
 
-1. **Ingest** (`build_index.py`) — Reads documents from `~/phone-rag/docs/`, splits text into overlapping chunks of 5 sentences (with 2-sentence overlap), generates embeddings via Ollama, and writes everything to `index.json`.
+1. **Ingest** — Reads documents from `~/phone-rag/docs/`, splits text into overlapping chunks (768 chars max, 96-char overlap) using recursive semantic splitting (paragraphs > sentences > clauses > words), generates embeddings in batches of 16 via Ollama, and stores everything in `index_nomic.json`.
 
-2. **Retrieve** — Embeds the user's query with the same model, then scores every chunk using a hybrid of:
-   - **Semantic**: Cosine similarity between query and chunk embeddings
-   - **Lexical**: Jaccard keyword overlap (scaled to 0.0–0.15) as a tie-breaking boost
+2. **Retrieve** — Embeds the user's query with the same model, then scores every chunk using:
+   - **Semantic**: Cosine similarity (with pre-computed norms)
+   - **Lexical**: Stopword-filtered Jaccard keyword overlap (0.0-0.15 boost)
+   - **Broad query detection**: Queries like "summarize" or "overview" retrieve all chunks from the target file instead of top-k
 
-3. **Generate** (`ask.py`) — Feeds the top-3 retrieved chunks into a prompt and streams the answer from a local chat model. If no chunk scores above the minimum threshold (0.28), it returns `NOT FOUND IN DOCUMENTS` instead of hallucinating.
+3. **Generate** — Feeds retrieved chunks into a prompt and streams the answer. If no chunk scores above the minimum threshold (0.28), it returns `NOT FOUND IN DOCUMENTS`.
 
-## Requirements
+## Beginner Walkthrough
 
-- **Termux** (or any Linux environment)
-- **Python 3.8+**
-- **Ollama** running locally on port `11434`
-- **pypdf** (`pip install pypdf`) — only needed if indexing PDF files
+This guide assumes you have an Android phone. Every step runs on the phone itself.
 
-### Ollama Models
+### Step 1: Install Termux
 
-Pull the required models before first use:
+Download **Termux** from [F-Droid](https://f-droid.org/en/packages/com.termux/) (not the Play Store version — it's outdated).
+
+Open Termux and update packages:
 
 ```bash
-ollama pull embeddinggemma    # embedding model (used for indexing + retrieval)
-ollama pull qwen3:0.6b        # chat model (used for answer generation)
+pkg update && pkg upgrade
 ```
 
-These are small models chosen to run comfortably within mobile hardware constraints.
-
-## Setup
+### Step 2: Install Python and Git
 
 ```bash
-# Clone the repo
-git clone <repo-url> ~/phone-rag
-cd ~/phone-rag
+pkg install python git
+```
 
-# Install PDF support (optional, only needed for .pdf files)
-pip install pypdf
+### Step 3: Install Ollama
 
-# Make sure Ollama is running
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+Start the Ollama server (keep it running in the background):
+
+```bash
 ollama serve &
 ```
 
-## Usage
+### Step 4: Pull the Models
 
-### 1. Add Documents
-
-Place your `.txt` and/or `.pdf` files into the `docs/` directory:
+You need two models — one for understanding documents (embedding) and one for generating answers (chat):
 
 ```bash
-cp my-notes.txt ~/phone-rag/docs/
-cp report.pdf ~/phone-rag/docs/
+ollama pull nomic-embed-text-v2-moe    # embedding model
+ollama pull gemma3:1b                   # chat model (small, fast)
 ```
 
-### 2. Build the Index
+These are small enough to run on most phones. The embedding model loads only when indexing/querying, then unloads to save RAM.
+
+### Step 5: Clone and Set Up
 
 ```bash
-python build_index.py
+git clone <repo-url> ~/phone-rag
+cd ~/phone-rag
+pip install pypdf flask
 ```
 
-Output:
+### Step 6: Add Your Documents
 
-```
-Indexed: my-notes.txt | chunk 1 | dims: 768
-Indexed: my-notes.txt | chunk 2 | dims: 768
-Indexed: report.pdf | chunk 1 | dims: 768
-...
-Saved index to: /data/data/com.termux/files/home/phone-rag/index.json
-New chunks indexed: 12
-Total chunks in index: 12
-```
-
-The index is **incremental** — running `build_index.py` again will skip files that have already been indexed. To re-index a file, remove its entries from `index.json` or delete the file and re-add it.
-
-### 3. Ask a Question (Full RAG)
+Place `.txt` or `.pdf` files into the `docs/` folder:
 
 ```bash
-python ask.py
+cp ~/storage/downloads/my-notes.txt ~/phone-rag/docs/
+cp ~/storage/downloads/report.pdf ~/phone-rag/docs/
 ```
 
-```
-Question: What is the main conclusion of the report?
-
-Retrieved context:
-
-report.pdf | chunk 3 | final=0.6821 | emb=0.6512 | lex=0.0309
-report.pdf | chunk 7 | final=0.5943 | emb=0.5780 | lex=0.0163
-report.pdf | chunk 1 | final=0.5201 | emb=0.5101 | lex=0.0100
-----------------------------------------
-
-Answer:
-
-The main conclusion is that...
-```
-
-### 4. Search Only (No Generation)
-
-To retrieve matching chunks without generating an answer:
+### Step 7: Launch the Web UI
 
 ```bash
-python search.py
+python app.py
 ```
 
-```
-Query: logging
+Open your phone's browser and go to `http://localhost:5000`.
 
-Top matches:
+You'll see three tabs:
 
-notes.txt | score=0.5432
-The application uses structured logging with JSON output...
-----------------------------------------
+- **RAG** — Ask questions grounded in your documents
+- **Chat** — Talk directly to the AI (no document context)
+- **Index** — Upload files and build the search index
+
+### Step 8: Build Your Index
+
+1. Go to the **Index** tab
+2. Tap the upload area to add files (or you can put them in `docs/` manually)
+3. Tap **Build Index** and wait for it to finish — you'll see progress as each file is chunked and embedded
+
+### Step 9: Ask Questions
+
+Switch to the **RAG** tab and type a question. The system will:
+1. Find the most relevant chunks from your documents
+2. Show you which sources it found
+3. Stream an answer grounded in those sources
+
+Try broad queries too — "summarize meeting.txt" will pull all chunks from that file.
+
+### Step 10: Direct Chat
+
+The **Chat** tab lets you talk to the model directly without any document context — useful for general questions, brainstorming, or quick calculations.
+
+## CLI Usage
+
+Prefer the terminal? The CLI tools are in the `cli/` folder:
+
+```bash
+# Build the index
+python cli/build_index_nomic.py
+
+# Ask a question (RAG)
+python cli/ask_nomic.py
+
+# Search only (no LLM generation)
+python cli/search.py
 ```
 
 ## Project Structure
 
 ```
 phone-rag/
-├── build_index.py   # Document ingestion: load, chunk, embed, store
-├── search.py        # Semantic search (retrieval only, no LLM)
-├── ask.py           # Full RAG pipeline: retrieve + generate
-├── index.json       # Vector index (auto-generated)
-├── docs/            # Place your source documents here
-│   ├── *.txt
-│   └── *.pdf
+├── app.py                      # Flask web UI (RAG + Chat + Index + Upload)
+├── cli/
+│   ├── build_index_nomic.py    # CLI: chunk, embed, store
+│   ├── ask_nomic.py            # CLI: retrieve + generate
+│   └── search.py               # CLI: retrieval only
+├── legacy/                     # Older embeddinggemma-based scripts
+├── docs/                       # Your source documents (.txt, .pdf)
+├── index_nomic.json            # Vector index (auto-generated)
+├── tech.md                     # Technical deep-dive
 └── README.md
 ```
 
 ## Configuration
 
-All configuration is done via constants at the top of each script:
+All configuration is via constants at the top of `app.py` (or the CLI scripts):
 
-| Parameter | File | Default | Description |
-|---|---|---|---|
-| `CHUNK_SIZE` | `build_index.py` | `5` | Number of sentences per chunk |
-| `OVERLAP` | `build_index.py` | `2` | Overlapping sentences between adjacent chunks |
-| `EMBED_MODEL` | `ask.py` | `embeddinggemma` | Ollama model for embedding |
-| `CHAT_MODEL` | `ask.py` | `qwen3:0.6b` | Ollama model for answer generation |
-| `MIN_SCORE` | `ask.py` | `0.28` | Minimum retrieval score to attempt generation |
-| `EMBED_KEEP_ALIVE` | `ask.py` | `0` | Seconds to keep embedding model loaded (0 = unload immediately to free RAM) |
-| `CHAT_KEEP_ALIVE` | `ask.py` | `3600` | Seconds to keep chat model loaded (reuse across queries) |
+| Parameter | Default | Description |
+|---|---|---|
+| `EMBED_MODEL` | `nomic-embed-text-v2-moe` | Ollama embedding model |
+| `CHAT_MODEL` | `gemma3:1b` | Ollama chat model |
+| `CHUNK_MAX` | `768` | Max characters per chunk |
+| `CHUNK_OVERLAP` | `96` | Character overlap between chunks |
+| `EMBED_BATCH_SIZE` | `16` | Chunks per embedding API call |
+| `MIN_SCORE` | `0.28` | Minimum score to attempt generation |
+| `MAX_BROAD_CHUNKS` | `25` | Max chunks for broad/summary queries |
+| `EMBED_KEEP_ALIVE` | `0` | Unload embedding model immediately |
+| `CHAT_KEEP_ALIVE` | `3600` | Keep chat model loaded for 1 hour |
 
 ### Memory Management
 
-The keep-alive settings are tuned for low-RAM devices:
+Tuned for low-RAM devices:
 
-- The **embedding model** is unloaded immediately after use (`keep_alive: 0`) to free memory for the chat model.
-- The **chat model** stays loaded for 1 hour (`keep_alive: 3600`) so subsequent queries are fast.
+- The **embedding model** unloads immediately after use (`keep_alive: 0`) to free memory for the chat model.
+- The **chat model** stays loaded for 1 hour (`keep_alive: 3600`) so consecutive queries are fast.
+- Embeddings are processed in **batches of 16** to reduce API round-trips while keeping memory bounded.
 
 ## Design Decisions
 
-- **Zero heavy dependencies** — Uses only Python standard library (`json`, `math`, `re`, `pathlib`, `urllib`) plus `pypdf` for PDF support. No LangChain, no FAISS, no ChromaDB.
-- **JSON as vector store** — Simple, portable, and inspectable. Adequate for personal document collections (hundreds to low thousands of chunks).
-- **Hybrid retrieval** — Pure semantic search can miss exact keyword matches; the Jaccard keyword boost helps surface chunks that contain the user's exact terms.
-- **Pre-computed norms** — Stored alongside embeddings to avoid redundant computation during search.
-- **Streaming output** — Answers are streamed token-by-token from Ollama for responsive UX on slower hardware.
-- **Deterministic generation** — Temperature is set to 0 to produce consistent, reproducible answers.
-- **Grounded answers** — The prompt instructs the model to answer only from the provided context and say "NOT FOUND" otherwise, reducing hallucination.
+- **Zero heavy dependencies** — Python stdlib (`json`, `math`, `re`, `pathlib`, `urllib`) plus `pypdf` and `flask`. No LangChain, no FAISS, no ChromaDB.
+- **JSON vector store** — Simple, portable, inspectable. Adequate for personal document collections.
+- **Hybrid retrieval** — Semantic search plus keyword boost to catch exact term matches that pure embedding similarity might miss.
+- **Pre-compiled regex & pre-computed norms** — Avoids redundant work on hot paths.
+- **Batched embeddings** — 16 chunks per API call instead of one-by-one, for faster indexing.
+- **Broad query detection** — Keyword heuristics detect summary/overview queries and retrieve entire files instead of top-k.
+- **Streaming output** — Answers stream token-by-token for responsive UX on slow hardware.
+- **Grounded answers** — The prompt instructs the model to answer only from context and say "NOT FOUND" otherwise.
 
 ## Limitations
 
-- **Linear search** — Every query scans all chunks. This is fine for small-to-medium collections but will slow down with tens of thousands of chunks. A future improvement could add approximate nearest neighbor (ANN) indexing.
-- **Sentence-based chunking** — The splitter relies on `.!?` punctuation. Documents without standard sentence boundaries (e.g., tables, lists, code) may chunk poorly.
-- **No document updates** — If a file's content changes, you must manually remove its old entries from `index.json` before re-indexing.
-- **Single-user, single-device** — Designed for personal use on one machine.
+- **Linear search** — Every query scans all chunks. Fine for small-to-medium collections, slow for tens of thousands of chunks.
+- **No document updates** — If a file changes, delete `index_nomic.json` and re-index.
+- **Single-user** — Designed for personal use on one device.
+- **Context window limits** — Very large files may exceed the model's context window even with the 25-chunk cap for broad queries.
 
 ## License
 

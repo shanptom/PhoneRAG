@@ -10,10 +10,13 @@ OUT_FILE = Path.home() / "phone-rag" / "index.json"
 OLLAMA_URL = "http://localhost:11434/api/embed"
 MODEL = "embeddinggemma"
 
-def embed_text(text: str):
+EMBED_BATCH_SIZE = 16  # chunks per embedding API call
+
+def embed_batch(texts):
+    """Embed multiple texts in a single API call."""
     payload = json.dumps({
         "model": MODEL,
-        "input": text,
+        "input": texts,
         "keep_alive": 0
     }).encode("utf-8")
 
@@ -27,31 +30,31 @@ def embed_text(text: str):
     with urlopen(req) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
-    return data["embeddings"][0]
+    return data["embeddings"]
 
-CHUNK_MAX = 512      # target max characters per chunk
-CHUNK_OVERLAP = 64   # character overlap between adjacent chunks
+CHUNK_MAX = 768      # target max characters per chunk
+CHUNK_OVERLAP = 96   # character overlap between adjacent chunks
 
 # Separators ordered from strongest to weakest semantic boundary.
 # The splitter tries each level in order, only falling through to
 # finer-grained splits when a section still exceeds CHUNK_MAX.
 SEPARATORS = [
-    "\n\n",                   # paragraphs / double newlines
-    "\n",                     # single newlines
-    r"(?<=[.!?])\s+",        # sentence boundaries
-    r"(?<=[;:])\s+",         # semicolons / colons
-    r"(?<=[,])\s+",          # commas
-    " ",                     # words
+    "\n\n",                              # paragraphs / double newlines
+    "\n",                                # single newlines
+    re.compile(r"(?<=[.!?])\s+"),        # sentence boundaries
+    re.compile(r"(?<=[;:])\s+"),         # semicolons / colons
+    re.compile(r"(?<=[,])\s+"),          # commas
+    " ",                                 # words
 ]
 
 def _split_once(text, separators):
     """Split text using the first separator that produces >1 piece."""
     for sep in separators:
-        # First and last separators are literal strings, others are regex
-        if sep in (" ", "\n", "\n\n"):
+        # First and last separators are literal strings, others are compiled regex
+        if isinstance(sep, str):
             parts = text.split(sep)
         else:
-            parts = re.split(sep, text)
+            parts = sep.split(text)
         parts = [p for p in parts if p.strip()]
         if len(parts) > 1:
             return parts, sep
@@ -160,18 +163,22 @@ def main():
 
         chunks = chunk_text(text)
 
-        for i, chunk in enumerate(chunks, start=1):
-            vector = embed_text(chunk)
-            norm = math.sqrt(sum(x * x for x in vector))
-            records.append({
-                "file": path.name,
-                "chunk_id": i,
-                "text": chunk,
-                "embedding": vector,
-                "norm": norm
-            })
-            print(f"Indexed: {path.name} | chunk {i} | dims: {len(vector)}")
-            new_count += 1
+        # Embed in batches for fewer API round-trips
+        for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
+            batch = chunks[batch_start:batch_start + EMBED_BATCH_SIZE]
+            vectors = embed_batch(batch)
+            for j, (chunk, vector) in enumerate(zip(batch, vectors)):
+                chunk_id = batch_start + j + 1
+                norm = math.sqrt(sum(x * x for x in vector))
+                records.append({
+                    "file": path.name,
+                    "chunk_id": chunk_id,
+                    "text": chunk,
+                    "embedding": vector,
+                    "norm": norm
+                })
+                print(f"Indexed: {path.name} | chunk {chunk_id} | dims: {len(vector)}")
+                new_count += 1
 
     OUT_FILE.write_text(json.dumps(records), encoding="utf-8")
     print(f"\nSaved index to: {OUT_FILE}")
