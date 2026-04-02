@@ -9,43 +9,21 @@ from flask import Flask, render_template_string, request, Response
 
 # ── Config ──────────────────────────────────────────────────────────
 DOCS_DIR = Path.home() / "phone-rag" / "docs"
-INDEX_FILE = Path.home() / "phone-rag" / "index_nomic.json"
+INDEX_FILE = Path.home() / "phone-rag" / "index_bm25.json"
 OLLAMA_BASE = "http://localhost:11434"
-EMBED_URL = OLLAMA_BASE + "/api/embed"
 GENERATE_URL = OLLAMA_BASE + "/api/generate"
 CHAT_URL = OLLAMA_BASE + "/api/chat"
 TAGS_URL = OLLAMA_BASE + "/api/tags"
 
-EMBED_MODEL = "nomic-embed-text-v2-moe"
 CHAT_MODEL = "gemma3:1b"
-MIN_SCORE = 0.28
-EMBED_KEEP_ALIVE = 0
+MIN_SCORE = 2.0  # BM25 scores are typically 0-30+; tune as needed
 CHAT_KEEP_ALIVE = 3600
 
-# ── Shared logic (from ask_nomic.py) ───────────────────────────────
+# ── BM25 parameters ──
+BM25_K1 = 1.5   # term frequency saturation
+BM25_B = 0.75   # length normalization
 
-def post_json(url, payload):
-    req = Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urlopen(req) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-
-def embed_text(text: str):
-    data = post_json(EMBED_URL, {
-        "model": EMBED_MODEL,
-        "input": text,
-        "keep_alive": EMBED_KEEP_ALIVE,
-    })
-    return data["embeddings"][0]
-
-
-# ── Indexing logic (from build_index_nomic.py) ────────────────────
-EMBED_BATCH_SIZE = 16
+# ── Chunking config ──
 CHUNK_MAX = 768
 CHUNK_OVERLAP = 96
 
@@ -112,29 +90,103 @@ def _merge_small_chunks(pieces, max_size, overlap):
     return chunks
 
 
+_HEADING_RE = re.compile(
+    r"^(?:#{1,6}\s+.+|[A-Z][^\n]{0,80})$"
+)
+
+
+def _is_heading(line):
+    """Detect lines that look like headings: markdown # or short uppercase-start lines without ending punctuation."""
+    line = line.strip()
+    if not line or len(line) > 120:
+        return False
+    if line.startswith("#"):
+        return True
+    # Short line, starts with uppercase, no ending sentence punctuation
+    if len(line) < 80 and line[0].isupper() and line[-1] not in ".!?,;:)\"'":
+        return True
+    return False
+
+
 def chunk_text(text: str):
     text = text.strip()
     if not text:
         return []
-    pieces = _recursive_split(text, SEPARATORS, CHUNK_MAX)
-    chunks = _merge_small_chunks(pieces, CHUNK_MAX, CHUNK_OVERLAP)
-    return [c for c in chunks if c]
+
+    # Extract heading context per paragraph
+    lines = text.split("\n")
+    current_heading = ""
+    sections = []  # list of (heading, paragraph_text)
+    buf = []
+
+    for line in lines:
+        if _is_heading(line) and not buf:
+            current_heading = line.strip().lstrip("# ").strip()
+        elif _is_heading(line) and buf:
+            sections.append((current_heading, "\n".join(buf)))
+            buf = []
+            current_heading = line.strip().lstrip("# ").strip()
+        else:
+            buf.append(line)
+
+    if buf:
+        sections.append((current_heading, "\n".join(buf)))
+
+    # Chunk each section and prepend heading
+    all_chunks = []
+    for heading, section_text in sections:
+        section_text = section_text.strip()
+        if not section_text:
+            continue
+        pieces = _recursive_split(section_text, SEPARATORS, CHUNK_MAX)
+        merged = _merge_small_chunks(pieces, CHUNK_MAX, CHUNK_OVERLAP)
+        for chunk in merged:
+            if not chunk:
+                continue
+            if heading:
+                all_chunks.append(f"[{heading}] {chunk}")
+            else:
+                all_chunks.append(chunk)
+
+    return all_chunks
 
 
-def embed_batch(texts):
-    data = post_json(EMBED_URL, {
-        "model": EMBED_MODEL,
-        "input": texts,
-        "keep_alive": 0,
-    })
-    return data["embeddings"]
+# ── Porter stemmer (lightweight, no deps) ─────────────────────────
+
+def _porter_stem(word):
+    """Minimal Porter stemmer — handles the most common English suffixes."""
+    if len(word) <= 2:
+        return word
+    # Step-like suffix stripping, ordered longest-first
+    for suffix, replacement in (
+        ("ational", "ate"), ("tional", "tion"), ("enci", "ence"),
+        ("anci", "ance"), ("izer", "ize"), ("alli", "al"),
+        ("entli", "ent"), ("eli", "e"), ("ousli", "ous"),
+        ("ization", "ize"), ("ation", "ate"), ("ator", "ate"),
+        ("alism", "al"), ("iveness", "ive"), ("fulness", "ful"),
+        ("ousness", "ous"), ("aliti", "al"), ("iviti", "ive"),
+        ("biliti", "ble"),
+    ):
+        if word.endswith(suffix):
+            stem = word[: -len(suffix)] + replacement
+            if len(stem) > 2:
+                return stem
+    # Common endings
+    for suffix, replacement in (
+        ("ement", ""), ("ment", ""), ("ness", ""), ("ence", ""),
+        ("ance", ""), ("able", ""), ("ible", ""), ("ling", ""),
+        ("ting", ""), ("ing", ""), ("tion", ""), ("sion", ""),
+        ("ies", "i"), ("ied", "i"),
+        ("ses", "s"), ("eed", "ee"),
+        ("ed", ""), ("ly", ""), ("er", ""), ("es", ""),
+        ("s", ""),
+    ):
+        if word.endswith(suffix) and len(word) - len(suffix) > 2:
+            return word[: -len(suffix)] + replacement
+    return word
 
 
-def cosine_similarity_prenorm(a, norm_a, b, norm_b):
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return sum(x * y for x, y in zip(a, b)) / (norm_a * norm_b)
-
+# ── BM25 tokenizer ────────────────────────────────────────────────
 
 _TOKENIZE_RE = re.compile(r"[a-z0-9]+")
 STOPWORDS = {
@@ -145,14 +197,58 @@ STOPWORDS = {
 }
 
 
-def keyword_boost(query, text):
-    q = set(_TOKENIZE_RE.findall(query.lower())) - STOPWORDS
-    t = set(_TOKENIZE_RE.findall(text.lower())) - STOPWORDS
-    if not q:
-        return 0.0
-    union = q | t
-    return 0.15 * (len(q & t) / len(union))
+def tokenize(text):
+    """Tokenize, filter stopwords, and stem. Returns list to preserve TF."""
+    return [_porter_stem(w) for w in _TOKENIZE_RE.findall(text.lower()) if w not in STOPWORDS]
 
+
+def term_freq(tokens):
+    """Count term frequencies from a token list."""
+    tf = {}
+    for t in tokens:
+        tf[t] = tf.get(t, 0) + 1
+    return tf
+
+
+# ── BM25 index ────────────────────────────────────────────────────
+
+def build_bm25_index(records):
+    """Compute IDF and avg_dl from records. Returns (idf, avg_dl)."""
+    n = len(records)
+    if n == 0:
+        return {}, 0
+    # Count how many docs each term appears in
+    df = {}
+    total_dl = 0
+    for rec in records:
+        tf = rec.get("tf", {})
+        total_dl += rec.get("dl", 0)
+        for term in tf:
+            df[term] = df.get(term, 0) + 1
+    avg_dl = total_dl / n
+    # IDF: log((N - df + 0.5) / (df + 0.5) + 1)
+    idf = {}
+    for term, freq in df.items():
+        idf[term] = math.log((n - freq + 0.5) / (freq + 0.5) + 1)
+    return idf, avg_dl
+
+
+def bm25_score(query_tokens, rec, idf, avg_dl):
+    """Score a single record against query tokens using BM25."""
+    tf = rec.get("tf", {})
+    dl = rec.get("dl", 0)
+    score = 0.0
+    for qt in set(query_tokens):
+        if qt not in idf:
+            continue
+        f = tf.get(qt, 0)
+        numerator = f * (BM25_K1 + 1)
+        denominator = f + BM25_K1 * (1 - BM25_B + BM25_B * dl / avg_dl) if avg_dl > 0 else f + BM25_K1
+        score += idf[qt] * numerator / denominator
+    return score
+
+
+# ── Broad query & retrieval ──────────────────────────────────────
 
 BROAD_KEYWORDS = {
     "summarize", "summary", "summarise", "overview", "outline",
@@ -161,6 +257,8 @@ BROAD_KEYWORDS = {
     "what is this about", "what does it say", "entire", "whole",
     "all about", "full",
 }
+
+MAX_BROAD_CHUNKS = 25
 
 
 def is_broad_query(query):
@@ -178,48 +276,43 @@ def find_target_file(query, records):
     return None
 
 
-MAX_BROAD_CHUNKS = 25
-
-
-def retrieve_broad(query, records):
+def retrieve_broad(query, records, idf, avg_dl):
     target = find_target_file(query, records)
     if target:
         file_chunks = sorted(
             [r for r in records if r["file"] == target],
             key=lambda r: r.get("chunk_id", 0),
         )[:MAX_BROAD_CHUNKS]
-        return [(1.0, 1.0, 0.0, r) for r in file_chunks], target
+        return [(1.0, r) for r in file_chunks], target
 
-    qvec = embed_text(query)
-    qnorm = math.sqrt(sum(x * x for x in qvec))
-    scored = sorted(
-        ((cosine_similarity_prenorm(qvec, qnorm, r["embedding"], r["norm"]), r) for r in records),
-        reverse=True, key=lambda x: x[0],
-    )
+    # No filename match — use BM25 to find the best file
+    query_tokens = tokenize(query)
+    scored = [(bm25_score(query_tokens, r, idf, avg_dl), r) for r in records]
+    scored.sort(reverse=True, key=lambda x: x[0])
     best_file = scored[0][1]["file"]
     file_chunks = sorted(
         [r for r in records if r["file"] == best_file],
         key=lambda r: r.get("chunk_id", 0),
     )[:MAX_BROAD_CHUNKS]
-    return [(1.0, 1.0, 0.0, r) for r in file_chunks], best_file
+    return [(1.0, r) for r in file_chunks], best_file
 
 
-def retrieve(query, records, top_k=5):
-    qvec = embed_text(query)
-    qnorm = math.sqrt(sum(x * x for x in qvec))
-    scored = []
-    for rec in records:
-        emb_score = cosine_similarity_prenorm(qvec, qnorm, rec["embedding"], rec["norm"])
-        lex_score = keyword_boost(query, rec["text"])
-        scored.append((emb_score + lex_score, emb_score, lex_score, rec))
+def retrieve(query, records, idf, avg_dl, top_k=3):
+    query_tokens = tokenize(query)
+    scored = [(bm25_score(query_tokens, r, idf, avg_dl), r) for r in records]
     scored.sort(reverse=True, key=lambda x: x[0])
-    return scored[:top_k]
+    # Drop chunks scoring below 25% of the top score to filter noise
+    top = scored[:top_k]
+    if top:
+        cutoff = top[0][0] * 0.25
+        top = [(s, r) for s, r in top if s >= cutoff]
+    return top
 
 
 def build_prompt(query, matches, broad=False):
     context = "\n\n".join(
         f"[Source: {rec['file']} | chunk={rec.get('chunk_id', '?')}]\n{rec['text']}"
-        for _, _, _, rec in matches
+        for _, rec in matches
     )
     if broad:
         return (
@@ -243,13 +336,16 @@ app = Flask(__name__)
 
 # Load index once at startup
 _records = []
+_idf = {}
+_avg_dl = 0
 
 
-def get_records():
-    global _records
-    if not _records:
+def get_index():
+    global _records, _idf, _avg_dl
+    if not _records and INDEX_FILE.exists():
         _records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-    return _records
+        _idf, _avg_dl = build_bm25_index(_records)
+    return _records, _idf, _avg_dl
 
 
 HTML = """\
@@ -259,7 +355,7 @@ HTML = """\
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0a0a0a">
-<title>Phone RAG</title>
+<title>DocQ</title>
 <style>
   :root {
     --bg: #0a0a0a;
@@ -498,8 +594,8 @@ HTML = """\
     font-size: 0.7rem; font-weight: 600; padding: 2px 8px;
     border-radius: 6px; text-transform: uppercase; letter-spacing: 0.04em;
   }
-  .file-item .status.indexed { background: rgba(34,197,94,0.12); color: var(--accent); }
-  .file-item .status.pending { background: rgba(234,179,8,0.12); color: var(--warn); }
+  .file-item .status.ready { background: rgba(34,197,94,0.12); color: var(--accent); }
+  .file-item .status.new { background: rgba(234,179,8,0.12); color: var(--warn); }
 
   /* Build log */
   #build-log {
@@ -532,11 +628,11 @@ HTML = """\
 <header>
   <div class="logo">
     <span class="dot"></span>
-    <h1>Phone RAG</h1>
+    <h1>DocQ</h1>
   </div>
   <div class="tabs">
-    <button class="active" onclick="switchTab('ask')">RAG</button>
-    <button onclick="switchTab('chat')">Chat</button>
+    <button class="active" onclick="switchTab('ask')">Ask Docs</button>
+    <button onclick="switchTab('chat')">Free Chat</button>
   </div>
 </header>
 
@@ -545,17 +641,17 @@ HTML = """\
   <div class="model-bar">
     <label for="model-select">Model</label>
     <select id="model-select"><option>loading...</option></select>
-    <button class="btn-ghost" onclick="toggleDrawer()" id="docs-btn">Docs</button>
+    <button class="btn-ghost" onclick="toggleDrawer()" id="docs-btn">My Files</button>
   </div>
   <div id="chat" class="chat-area">
     <div class="empty-state" id="rag-empty">
       <span class="icon">&#128218;</span>
-      <span class="title">Ask your documents</span>
-      <span class="hint">Questions are answered from your indexed files</span>
+      <span class="title">Ask your files anything</span>
+      <span class="hint">Get answers based on your uploaded documents</span>
     </div>
   </div>
   <form id="form" class="input-bar">
-    <input type="text" id="q" placeholder="Ask a question..." autocomplete="off" autofocus>
+    <input type="text" id="q" placeholder="Ask about your files..." autocomplete="off" autofocus>
     <button id="btn" type="submit" class="btn-send">&#9654;</button>
   </form>
 </div>
@@ -570,12 +666,12 @@ HTML = """\
   <div id="direct-chat" class="chat-area">
     <div class="empty-state" id="chat-empty">
       <span class="icon">&#128172;</span>
-      <span class="title">Direct chat</span>
-      <span class="hint">Talk to the model without document context</span>
+      <span class="title">Open conversation</span>
+      <span class="hint">Chat freely — no documents needed</span>
     </div>
   </div>
   <form id="chat-form" class="input-bar">
-    <input type="text" id="chat-q" placeholder="Message..." autocomplete="off">
+    <input type="text" id="chat-q" placeholder="Type a message..." autocomplete="off">
     <button id="chat-btn" type="submit" class="btn-send">&#9654;</button>
   </form>
 </div>
@@ -585,18 +681,18 @@ HTML = """\
 <div class="drawer" id="drawer">
   <div class="drawer-handle" onclick="toggleDrawer()"></div>
   <div class="drawer-header">
-    <h2>Documents</h2>
+    <h2>My Files</h2>
     <button class="drawer-close" onclick="toggleDrawer()">&#10005;</button>
   </div>
   <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click();">
     <span class="upload-icon">&#128206;</span>
-    Tap to select files or drag &amp; drop
-    <span class="upload-hint">.txt and .pdf supported</span>
+    Tap to add files or drag &amp; drop
+    <span class="upload-hint">Supports .txt and .pdf files</span>
     <input type="file" id="file-input" multiple accept=".txt,.pdf">
   </div>
   <div class="upload-status" id="upload-status"></div>
-  <button id="build-btn" class="btn-build" onclick="startBuild()">Build Index</button>
-  <div class="section-label" style="margin-top:16px;">Files</div>
+  <button id="build-btn" class="btn-build" onclick="startBuild()">Prepare Files for Search</button>
+  <div class="section-label" style="margin-top:16px;">Your files</div>
   <div id="file-list" class="file-list"></div>
   <div id="build-log" style="display:none;"></div>
 </div>
@@ -714,13 +810,13 @@ function loadDocs() {
   fetch("/docs").then(r => r.json()).then(data => {
     const el = document.getElementById("file-list");
     if (data.files.length === 0) {
-      el.innerHTML = '<div style="color:#888;padding:8px;">No .txt or .pdf files in docs/</div>';
+      el.innerHTML = '<div style="color:#888;padding:8px;">No files yet — add some above</div>';
       return;
     }
     el.innerHTML = data.files.map(f => {
       const icon = f.name.endsWith('.pdf') ? '&#128196;' : '&#128209;';
       return `<div class="file-item"><span class="file-icon">${icon}</span><span class="name">${esc(f.name)}</span>` +
-        `<span class="status ${f.indexed ? 'indexed' : 'pending'}">${f.indexed ? 'indexed' : 'pending'}</span></div>`;
+        `<span class="status ${f.indexed ? 'ready' : 'new'}">${f.indexed ? 'Ready' : 'New'}</span></div>`;
     }).join("");
   }).catch(err => {
     document.getElementById("file-list").innerHTML = '<div style="color:#f88;">Failed to load docs</div>';
@@ -731,7 +827,7 @@ function startBuild() {
   const btn = document.getElementById("build-btn");
   const log = document.getElementById("build-log");
   btn.disabled = true;
-  btn.innerHTML = 'Indexing<span class="spinner"></span>';
+  btn.innerHTML = 'Preparing<span class="spinner"></span>';
   log.style.display = "block";
   log.textContent = "";
 
@@ -765,7 +861,7 @@ function startBuild() {
 
   function finish() {
     btn.disabled = false;
-    btn.textContent = "Build Index";
+    btn.textContent = "Prepare Files for Search";
     loadDocs();
   }
 }
@@ -911,17 +1007,17 @@ def ask():
 
     def generate():
         try:
-            records = get_records()
+            records, idf, avg_dl = get_index()
             broad = is_broad_query(query)
 
             if broad:
-                matches, target = retrieve_broad(query, records)
+                matches, target = retrieve_broad(query, records, idf, avg_dl)
                 src_text = f"Broad query — {len(matches)} chunks from: {target}"
             else:
-                matches = retrieve(query, records, top_k=5)
+                matches = retrieve(query, records, idf, avg_dl, top_k=5)
                 src_lines = [
-                    f"{rec['file']} chunk {rec.get('chunk_id', '?')} ({final:.3f})"
-                    for final, _, _, rec in matches
+                    f"{rec['file']} chunk {rec.get('chunk_id', '?')} ({score:.2f})"
+                    for score, rec in matches
                 ]
                 src_text = " | ".join(src_lines)
 
@@ -1008,8 +1104,9 @@ def direct_chat():
 
 @app.route("/reload", methods=["POST"])
 def reload_index():
-    global _records
+    global _records, _idf, _avg_dl
     _records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+    _idf, _avg_dl = build_bm25_index(_records)
     return {"status": "ok", "chunks": len(_records)}
 
 
@@ -1095,31 +1192,28 @@ def build():
                     continue
 
                 chunks = chunk_text(text)
-                yield f"data: {json.dumps({'type': 'status', 'text': f'Embedding {path.name} ({len(chunks)} chunks)...'})}\n\n"
+                yield f"data: {json.dumps({'type': 'status', 'text': f'Indexing {path.name} ({len(chunks)} chunks)...'})}\n\n"
 
-                for batch_start in range(0, len(chunks), EMBED_BATCH_SIZE):
-                    batch = chunks[batch_start:batch_start + EMBED_BATCH_SIZE]
-                    vectors = embed_batch(batch)
-                    for j, (chunk, vector) in enumerate(zip(batch, vectors)):
-                        chunk_id = batch_start + j + 1
-                        norm = math.sqrt(sum(x * x for x in vector))
-                        records.append({
-                            "file": path.name,
-                            "chunk_id": chunk_id,
-                            "text": chunk,
-                            "embedding": vector,
-                            "norm": norm,
-                        })
-                        new_count += 1
-                    yield f"data: {json.dumps({'type': 'progress', 'file': path.name, 'chunks_done': min(batch_start + EMBED_BATCH_SIZE, len(chunks)), 'chunks_total': len(chunks)})}\n\n"
+                for i, chunk in enumerate(chunks, start=1):
+                    tokens = tokenize(chunk)
+                    records.append({
+                        "file": path.name,
+                        "chunk_id": i,
+                        "text": chunk,
+                        "tf": term_freq(tokens),
+                        "dl": len(tokens),
+                    })
+                    new_count += 1
 
+                yield f"data: {json.dumps({'type': 'progress', 'file': path.name, 'chunks_done': len(chunks), 'chunks_total': len(chunks)})}\n\n"
                 yield f"data: {json.dumps({'type': 'status', 'text': f'Done: {path.name} ({len(chunks)} chunks)'})}\n\n"
 
             INDEX_FILE.write_text(json.dumps(records), encoding="utf-8")
 
-            # Reload in-memory index
-            global _records
+            # Reload in-memory index + recompute BM25 stats
+            global _records, _idf, _avg_dl
             _records = records
+            _idf, _avg_dl = build_bm25_index(_records)
 
             yield f"data: {json.dumps({'type': 'done', 'text': f'Indexing complete.', 'new': new_count, 'total': len(records)})}\n\n"
 
