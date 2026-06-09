@@ -1,8 +1,12 @@
+import base64
 import json
 import math
+import os
 import re
 from pathlib import Path
-from urllib.request import Request, urlopen
+import litert_lm
+import threading
+import time
 
 from pypdf import PdfReader
 from flask import Flask, render_template_string, request, Response
@@ -10,14 +14,20 @@ from flask import Flask, render_template_string, request, Response
 # ── Config ──────────────────────────────────────────────────────────
 DOCS_DIR = Path.home() / "phone-rag" / "docs"
 INDEX_FILE = Path.home() / "phone-rag" / "index_bm25.json"
-OLLAMA_BASE = "http://localhost:11434"
-GENERATE_URL = OLLAMA_BASE + "/api/generate"
-CHAT_URL = OLLAMA_BASE + "/api/chat"
-TAGS_URL = OLLAMA_BASE + "/api/tags"
 
-CHAT_MODEL = "gemma3:1b"
+# Defaults to ~/models/ (works on Termux); override with the MODEL_PATH env var.
+MODEL_PATH = os.environ.get(
+    "MODEL_PATH", str(Path.home() / "models" / "gemma-4-E2B-it.litertlm")
+)
+MODEL_NAME = "gemma4-e2b"
 MIN_SCORE = 2.0  # BM25 scores are typically 0-30+; tune as needed
-CHAT_KEEP_ALIVE = 3600
+
+# Appended to system prompts so the small model answers in plain prose. The UI
+# renders plain text (no Markdown renderer, no CDN), so this keeps output clean.
+PLAIN_TEXT_RULE = (
+    " Respond in plain prose only. Do not use Markdown formatting: "
+    "no asterisks, underscores, backticks, headings, or bullet lists."
+)
 
 # ── BM25 parameters ──
 BM25_K1 = 1.5   # term frequency saturation
@@ -347,6 +357,66 @@ def get_index():
         _idf, _avg_dl = build_bm25_index(_records)
     return _records, _idf, _avg_dl
 
+# ── LiteRT-LM engine (loaded once) ──────────────────────────────────
+print(f"Loading LiteRT model from {MODEL_PATH}...")
+litert_lm.set_min_log_severity(litert_lm.LogSeverity.ERROR)
+_engine = litert_lm.Engine(MODEL_PATH, vision_backend=litert_lm.Backend.CPU())
+print("Model loaded.")
+_engine_lock = threading.Lock()
+_active_conversation = None
+_active_cancel_event = None
+_active_conv_lock = threading.Lock()
+
+
+def _set_active_conversation(conversation, cancel_event):
+    global _active_conversation, _active_cancel_event
+    with _active_conv_lock:
+        _active_conversation = conversation
+        _active_cancel_event = cancel_event
+
+
+def _clear_active_conversation(conversation):
+    global _active_conversation, _active_cancel_event
+    with _active_conv_lock:
+        if _active_conversation is conversation:
+            _active_conversation = None
+            _active_cancel_event = None
+
+
+def _close_conversation(conversation, cancelled=False):
+    """Release a conversation, always reusing the single shared Engine.
+
+    On a clean finish we close the conversation. On a user cancel we just drop
+    the reference and let the GC reclaim it: calling close() (or LiteRT's
+    cancel) while the stream is mid-step hangs the interpreter, and rebuilding
+    the Engine reloads the whole model — a multi-second freeze plus a memory
+    leak on a phone. Abandoning the conversation avoids both.
+    """
+    if not conversation or cancelled:
+        return
+    try:
+        conversation.close()
+    except BaseException:
+        pass
+
+
+def _stream_litert_response(conversation, message, cancel_event):
+    stream = conversation.send_message_async(message)
+    while True:
+        if cancel_event.is_set():
+            yield f"data: {json.dumps({'type': 'stopped', 'text': 'Generation stopped.'})}\n\n"
+            return
+        try:
+            chunk = next(stream)
+        except StopIteration:
+            return
+        if cancel_event.is_set():
+            yield f"data: {json.dumps({'type': 'stopped', 'text': 'Generation stopped.'})}\n\n"
+            return
+        text = _extract_text(chunk)
+        if text:
+            yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+
 
 HTML = """\
 <!DOCTYPE html>
@@ -532,6 +602,7 @@ HTML = """\
   .btn-send:hover { opacity: 0.9; }
   .btn-send:active { transform: scale(0.97); }
   .btn-send:disabled { opacity: 0.35; }
+  .btn-stop { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); }
 
   /* ── Spinner ── */
   .spinner { display: inline-block; }
@@ -626,23 +697,14 @@ HTML = """\
 </head>
 <body>
 <header>
-  <div class="logo">
-    <span class="dot"></span>
-    <h1>DocQ</h1>
-  </div>
   <div class="tabs">
-    <button class="active" onclick="switchTab('ask')">Ask Docs</button>
-    <button onclick="switchTab('chat')">Free Chat</button>
+    <button id="tab-btn-ask" class="active" onclick="switchTab('ask')">Ask Docs</button>
+    <button id="tab-btn-chat" onclick="switchTab('chat')">Chat</button>
   </div>
 </header>
 
 <!-- RAG Tab -->
 <div id="tab-ask" class="tab-content active">
-  <div class="model-bar">
-    <label for="model-select">Model</label>
-    <select id="model-select"><option>loading...</option></select>
-    <button class="btn-ghost" onclick="toggleDrawer()" id="docs-btn">My Files</button>
-  </div>
   <div id="chat" class="chat-area">
     <div class="empty-state" id="rag-empty">
       <span class="icon">&#128218;</span>
@@ -650,7 +712,8 @@ HTML = """\
       <span class="hint">Get answers based on your uploaded documents</span>
     </div>
   </div>
-  <form id="form" class="input-bar">
+  <form id="form" class="input-bar" style="align-items: center;">
+    <button type="button" onclick="toggleDrawer()" style="background: none; border: none; font-size: 1.4rem; cursor: pointer; padding: 0 4px;" title="My Files">📁</button>
     <input type="text" id="q" placeholder="Ask about your files..." autocomplete="off" autofocus>
     <button id="btn" type="submit" class="btn-send">&#9654;</button>
   </form>
@@ -658,10 +721,11 @@ HTML = """\
 
 <!-- Chat Tab -->
 <div id="tab-chat" class="tab-content">
-  <div class="model-bar">
-    <label for="chat-model-select">Model</label>
-    <select id="chat-model-select"></select>
+  <div class="model-bar" style="justify-content: flex-end; padding: 4px 16px;">
     <button class="btn-ghost" onclick="clearChat()">Clear</button>
+    <label for="chat-img-input" style="cursor: pointer; margin-left: 8px; font-size: 1.1rem; padding: 4px;" title="Attach File">📎</label>
+    <input type="file" id="chat-img-input" accept="image/*,.txt" style="display: none;">
+    <span id="chat-img-name" style="font-size: 0.8rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; margin-left: 4px;"></span>
   </div>
   <div id="direct-chat" class="chat-area">
     <div class="empty-state" id="chat-empty">
@@ -701,26 +765,6 @@ const chat = document.getElementById("chat");
 const form = document.getElementById("form");
 const qInput = document.getElementById("q");
 const btn = document.getElementById("btn");
-const modelSelect = document.getElementById("model-select");
-
-const chatModelSelect = document.getElementById("chat-model-select");
-
-// Fetch available models on load — populate both selectors
-fetch("/models").then(r => r.json()).then(data => {
-  [modelSelect, chatModelSelect].forEach(sel => {
-    sel.innerHTML = "";
-    for (const name of data.models) {
-      const opt = document.createElement("option");
-      opt.value = name; opt.textContent = name;
-      if (name === data.default) opt.selected = true;
-      sel.appendChild(opt);
-    }
-  });
-}).catch(() => {
-  [modelSelect, chatModelSelect].forEach(sel => {
-    sel.innerHTML = '<option>gemma3:1b</option>';
-  });
-});
 
 function addMsg(cls, html) {
   const empty = document.getElementById("rag-empty");
@@ -733,21 +777,30 @@ function addMsg(cls, html) {
   return d;
 }
 
+let askStreaming = false;
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (askStreaming) {
+    btn.disabled = true;
+    await fetch("/abort", { method: "POST" });
+    return;
+  }
   const q = qInput.value.trim();
   if (!q) return;
   qInput.value = "";
   addMsg("user", esc(q));
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
+  
+  askStreaming = true;
+  btn.innerHTML = '⏹';
+  btn.classList.add("btn-stop");
 
   const botDiv = addMsg("bot", '<div class="sources"></div><div class="answer"></div>');
   const srcEl = botDiv.querySelector(".sources");
   const ansEl = botDiv.querySelector(".answer");
+  let fullAnswer = "";
 
   try {
-    const resp = await fetch("/ask?q=" + encodeURIComponent(q) + "&model=" + encodeURIComponent(modelSelect.value));
+    const resp = await fetch("/ask?q=" + encodeURIComponent(q) + "&model=gemma4-e2b");
     if (!resp.ok) throw new Error("Server error " + resp.status);
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
@@ -764,8 +817,15 @@ form.addEventListener("submit", async (e) => {
         if (payload.type === "sources") {
           srcEl.textContent = payload.text;
         } else if (payload.type === "token") {
-          ansEl.textContent += payload.text;
+          if (payload.text === "NOT FOUND IN DOCUMENTS") {
+             ansEl.textContent = payload.text;
+          } else {
+             fullAnswer += payload.text;
+             ansEl.innerHTML = fmt(fullAnswer);
+          }
           chat.scrollTop = chat.scrollHeight;
+        } else if (payload.type === "stopped") {
+          break;
         } else if (payload.type === "error") {
           ansEl.innerHTML = '<span style="color:#f88">' + esc(payload.text) + '</span>';
         }
@@ -773,13 +833,27 @@ form.addEventListener("submit", async (e) => {
     }
   } catch (err) {
     addMsg("error", esc("Error: " + err.message));
+  } finally {
+    askStreaming = false;
+    btn.disabled = false;
+    btn.innerHTML = "&#9654;";
+    btn.classList.remove("btn-stop");
   }
-  btn.disabled = false;
-  btn.innerHTML = "&#9654;";
 });
 
 function esc(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Plain-text rendering: escape HTML, strip any stray Markdown the model leaks,
+// and keep line breaks. No external renderer — works fully offline.
+function fmt(s) {
+  let t = esc(s);
+  t = t.replace(/\\*\\*([^*]+)\\*\\*/g, "$1")    // **bold**
+       .replace(/`{1,3}([^`]+)`{1,3}/g, "$1")    // `code`
+       .replace(/^#{1,6}\\s+/gm, "")             // # headings
+       .replace(/^\\s*[-*]\\s+/gm, "• ");        // - bullets -> •
+  return t.replace(/\\n/g, "<br>");
 }
 
 // ── Tab switching ──
@@ -787,7 +861,7 @@ function switchTab(name) {
   document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
   document.querySelectorAll(".tabs button").forEach(el => el.classList.remove("active"));
   document.getElementById("tab-" + name).classList.add("active");
-  document.querySelector(`.tabs button[onclick="switchTab('${name}')"]`).classList.add("active");
+  document.getElementById("tab-btn-" + name).classList.add("active");
 }
 
 // ── Docs drawer ──
@@ -815,12 +889,27 @@ function loadDocs() {
     }
     el.innerHTML = data.files.map(f => {
       const icon = f.name.endsWith('.pdf') ? '&#128196;' : '&#128209;';
-      return `<div class="file-item"><span class="file-icon">${icon}</span><span class="name">${esc(f.name)}</span>` +
-        `<span class="status ${f.indexed ? 'ready' : 'new'}">${f.indexed ? 'Ready' : 'New'}</span></div>`;
+      return `<div class="file-item">
+        <span class="file-icon">${icon}</span>
+        <span class="name">${esc(f.name)}</span>
+        <span class="status ${f.indexed ? 'ready' : 'new'}">${f.indexed ? 'Ready' : 'New'}</span>
+        <button onclick="deleteDoc('${esc(f.name)}')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1.2rem;padding:0 4px;line-height:1;" title="Delete">×</button>
+      </div>`;
     }).join("");
   }).catch(err => {
     document.getElementById("file-list").innerHTML = '<div style="color:#f88;">Failed to load docs</div>';
   });
+}
+
+async function deleteDoc(name) {
+  if (!confirm(`Remove ${name} from your search index?`)) return;
+  try {
+    const resp = await fetch("/docs/" + encodeURIComponent(name), { method: "DELETE" });
+    if (!resp.ok) throw new Error("Server error");
+    loadDocs();
+  } catch (err) {
+    alert("Failed to delete " + name);
+  }
 }
 
 function startBuild() {
@@ -871,7 +960,40 @@ const directChat = document.getElementById("direct-chat");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-q");
 const chatBtn = document.getElementById("chat-btn");
+const chatImgInput = document.getElementById("chat-img-input");
+const chatImgName = document.getElementById("chat-img-name");
 let chatHistory = [];
+let pendingFileData = null;
+let pendingFileType = null;
+let pendingFileName = null;
+
+chatImgInput.addEventListener("change", () => {
+  if (chatImgInput.files.length) {
+    const file = chatImgInput.files[0];
+    chatImgName.textContent = file.name;
+    pendingFileName = file.name;
+    const reader = new FileReader();
+    
+    if (file.name.endsWith(".txt") || file.type === "text/plain") {
+       pendingFileType = "text";
+       reader.onload = (e) => {
+         pendingFileData = e.target.result;
+       };
+       reader.readAsText(file);
+    } else {
+       pendingFileType = "image";
+       reader.onload = (e) => {
+         pendingFileData = e.target.result;
+       };
+       reader.readAsDataURL(file);
+    }
+  } else {
+    chatImgName.textContent = "";
+    pendingFileData = null;
+    pendingFileType = null;
+    pendingFileName = null;
+  }
+});
 
 function addChatMsg(role, html) {
   const empty = document.getElementById("chat-empty");
@@ -887,17 +1009,56 @@ function addChatMsg(role, html) {
 function clearChat() {
   chatHistory = [];
   directChat.innerHTML = "";
+  chatImgInput.value = "";
+  chatImgName.textContent = "";
+  pendingFileData = null;
+  pendingFileType = null;
+  pendingFileName = null;
 }
 
+let chatStreaming = false;
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (chatStreaming) {
+    chatBtn.disabled = true;
+    await fetch("/abort", { method: "POST" });
+    return;
+  }
   const msg = chatInput.value.trim();
-  if (!msg) return;
+  if (!msg && !pendingFileData) return;
+  
+  let userHtml = esc(msg);
+  let finalContent = msg;
+  
+  if (pendingFileType === "image") {
+     userHtml = `<img src="${pendingFileData}" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px;"><br>` + userHtml;
+  } else if (pendingFileType === "text") {
+     userHtml = `<div style="padding:8px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:8px; font-size:0.85rem; border-left:3px solid var(--accent);">
+       <strong>📄 ${esc(pendingFileName)}</strong><br>
+       <div style="max-height:100px; overflow-y:auto; white-space:pre-wrap; margin-top:4px; color:var(--text-dim);">${esc(pendingFileData)}</div>
+     </div>` + userHtml;
+     finalContent = msg + (msg ? "\\n\\n" : "") + "[Attached File: " + pendingFileName + "]\\n" + pendingFileData;
+  }
+
   chatInput.value = "";
-  addChatMsg("user", esc(msg));
-  chatHistory.push({ role: "user", content: msg });
-  chatBtn.disabled = true;
-  chatBtn.innerHTML = '<span class="spinner"></span>';
+  addChatMsg("user", userHtml);
+  
+  const msgObj = { role: "user", content: finalContent };
+  if (pendingFileType === "image") {
+     msgObj.image = pendingFileData;
+  }
+  chatHistory.push(msgObj);
+  
+  // Clear pending file
+  chatImgInput.value = "";
+  chatImgName.textContent = "";
+  pendingFileData = null;
+  pendingFileType = null;
+  pendingFileName = null;
+
+  chatStreaming = true;
+  chatBtn.innerHTML = '⏹';
+  chatBtn.classList.add("btn-stop");
 
   const botDiv = addChatMsg("assistant", "");
   let fullResponse = "";
@@ -907,7 +1068,7 @@ chatForm.addEventListener("submit", async (e) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: chatModelSelect.value,
+        model: "gemma4-e2b",
         messages: chatHistory
       })
     });
@@ -926,8 +1087,10 @@ chatForm.addEventListener("submit", async (e) => {
         const payload = JSON.parse(line.slice(6));
         if (payload.type === "token") {
           fullResponse += payload.text;
-          botDiv.textContent = fullResponse;
+          botDiv.innerHTML = fmt(fullResponse);
           directChat.scrollTop = directChat.scrollHeight;
+        } else if (payload.type === "stopped") {
+          break;
         } else if (payload.type === "error") {
           botDiv.innerHTML = '<span style="color:#f88">' + esc(payload.text) + '</span>';
         }
@@ -938,9 +1101,12 @@ chatForm.addEventListener("submit", async (e) => {
     }
   } catch (err) {
     addChatMsg("error", esc("Error: " + err.message));
+  } finally {
+    chatStreaming = false;
+    chatBtn.disabled = false;
+    chatBtn.innerHTML = "&#9654;";
+    chatBtn.classList.remove("btn-stop");
   }
-  chatBtn.disabled = false;
-  chatBtn.innerHTML = "&#9654;";
 });
 
 // ── File upload ──
@@ -997,10 +1163,29 @@ def index():
     return render_template_string(HTML)
 
 
+def _extract_text(chunk):
+    """Extract text from a LiteRT-LM streaming chunk."""
+    if isinstance(chunk, dict):
+        # Try common response formats
+        if "content" in chunk:
+            content = chunk["content"]
+            if isinstance(content, list):
+                return "".join(c.get("text", "") for c in content if isinstance(c, dict))
+            if isinstance(content, str):
+                return content
+        if "text" in chunk:
+            return chunk["text"]
+        # Try role/content message format
+        if "message" in chunk:
+            return chunk["message"].get("content", "")
+    if isinstance(chunk, str):
+        return chunk
+    return ""
+
+
 @app.route("/ask")
 def ask():
     query = request.args.get("q", "").strip()
-    chat_model = request.args.get("model", CHAT_MODEL)
     if not query:
         return Response("data: " + json.dumps({"type": "error", "text": "Empty question."}) + "\n\n",
                         content_type="text/event-stream")
@@ -1023,35 +1208,25 @@ def ask():
 
             yield f"data: {json.dumps({'type': 'sources', 'text': src_text})}\n\n"
 
-            if not broad and matches[0][0] < MIN_SCORE:
+            if not broad and (not matches or matches[0][0] < MIN_SCORE):
                 yield f"data: {json.dumps({'type': 'token', 'text': 'NOT FOUND IN DOCUMENTS'})}\n\n"
                 return
 
             prompt = build_prompt(query, matches, broad=broad)
-            req = Request(
-                GENERATE_URL,
-                data=json.dumps({
-                    "model": chat_model,
-                    "prompt": prompt,
-                    "stream": True,
-                    "think": False,
-                    "keep_alive": CHAT_KEEP_ALIVE,
-                    "options": {
-                        "temperature": 0,
-                        "num_predict": 512 if broad else 256,
-                    },
-                }).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
 
-            with urlopen(req) as resp:
-                for raw_line in resp:
-                    if not raw_line.strip():
-                        continue
-                    obj = json.loads(raw_line.decode("utf-8"))
-                    if "response" in obj:
-                        yield f"data: {json.dumps({'type': 'token', 'text': obj['response']})}\n\n"
+            cancel_event = threading.Event()
+            with _engine_lock:
+                sampler = litert_lm.SamplerConfig(temperature=0.1, top_k=20)
+                conversation = _engine.create_conversation(
+                    system_message="You are a helpful assistant that answers questions based on provided context. Be concise and accurate." + PLAIN_TEXT_RULE,
+                    sampler_config=sampler,
+                )
+                _set_active_conversation(conversation, cancel_event)
+            try:
+                yield from _stream_litert_response(conversation, prompt, cancel_event)
+            finally:
+                _clear_active_conversation(conversation)
+                _close_conversation(conversation, cancel_event.is_set())
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
@@ -1061,9 +1236,8 @@ def ask():
 
 @app.route("/chat", methods=["POST"])
 def direct_chat():
-    """Direct multi-turn chat with an Ollama model (no RAG)."""
+    """Direct multi-turn chat with Gemma 4 via LiteRT (no RAG)."""
     data = request.get_json()
-    model = data.get("model", CHAT_MODEL)
     messages = data.get("messages", [])
     if not messages:
         return Response("data: " + json.dumps({"type": "error", "text": "No messages."}) + "\n\n",
@@ -1071,35 +1245,82 @@ def direct_chat():
 
     def generate():
         try:
-            req = Request(
-                CHAT_URL,
-                data=json.dumps({
-                    "model": model,
-                    "messages": messages,
-                    "stream": True,
-                    "keep_alive": CHAT_KEEP_ALIVE,
-                    "options": {
-                        "temperature": 0.7,
-                        "num_predict": 512,
-                    },
-                }).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
+            cancel_event = threading.Event()
+            with _engine_lock:
+                sampler = litert_lm.SamplerConfig(temperature=0.7, top_k=40)
+                conversation = _engine.create_conversation(
+                    system_message="You are a helpful assistant." + PLAIN_TEXT_RULE,
+                    sampler_config=sampler,
+                )
+                _set_active_conversation(conversation, cancel_event)
+            try:
+                    for msg in messages[:-1]:
+                        role = msg.get("role", "user")
+                        content = msg.get("content", "")
+                        image_b64 = msg.get("image", "")
+                        
+                        if role == "user":
+                            parts = []
+                            if image_b64:
+                                if "," in image_b64:
+                                    image_b64 = image_b64.split(",", 1)[1]
+                                img_bytes = base64.b64decode(image_b64)
+                                parts.append(litert_lm.Content.ImageBytes(img_bytes))
+                            if content:
+                                parts.append(litert_lm.Content.Text(content))
+                            
+                            if len(parts) == 1 and not image_b64:
+                                conversation.send_message(content)
+                            elif parts:
+                                conversation.send_message(litert_lm.Contents.of(*parts))
 
-            with urlopen(req) as resp:
-                for raw_line in resp:
-                    if not raw_line.strip():
-                        continue
-                    obj = json.loads(raw_line.decode("utf-8"))
-                    content = obj.get("message", {}).get("content", "")
-                    if content:
-                        yield f"data: {json.dumps({'type': 'token', 'text': content})}\n\n"
+                    last_msg = messages[-1]
+                    last_content = last_msg.get("content", "")
+                    last_image = last_msg.get("image", "")
+                    
+                    parts = []
+                    if last_image:
+                        if "," in last_image:
+                            last_image = last_image.split(",", 1)[1]
+                        img_bytes = base64.b64decode(last_image)
+                        parts.append(litert_lm.Content.ImageBytes(img_bytes))
+                    if last_content:
+                        parts.append(litert_lm.Content.Text(last_content))
+                    
+                    if len(parts) == 1 and not last_image:
+                        msg_to_send = last_content
+                    elif parts:
+                        msg_to_send = litert_lm.Contents.of(*parts)
+                    else:
+                        msg_to_send = ""
+                        
+                    if msg_to_send:
+                        yield from _stream_litert_response(conversation, msg_to_send, cancel_event)
+
+            finally:
+                _clear_active_conversation(conversation)
+                _close_conversation(conversation, cancel_event.is_set())
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
 
     return Response(generate(), content_type="text/event-stream")
+
+
+@app.route("/abort", methods=["POST"])
+def abort_generation():
+    """Signal the active generation to stop.
+
+    Only sets a flag — the streaming loop checks it between tokens, stops
+    yielding, and abandons the conversation. We deliberately do NOT call into
+    LiteRT cancellation or rebuild the Engine here; both froze the app
+    on-device for minutes. Returns immediately so the UI never blocks.
+    """
+    with _active_conv_lock:
+        cancel_event = _active_cancel_event
+    if cancel_event:
+        cancel_event.set()
+    return {"status": "ok"}
 
 
 @app.route("/reload", methods=["POST"])
@@ -1148,14 +1369,31 @@ def upload():
 @app.route("/docs")
 def docs():
     """List docs in DOCS_DIR and which are already indexed."""
-    indexed = set()
-    if INDEX_FILE.exists():
-        records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-        indexed = {r["file"] for r in records}
+    records, _, _ = get_index()
+    indexed = {r["file"] for r in records}
     files = []
     for p in sorted(list(DOCS_DIR.glob("*.txt")) + list(DOCS_DIR.glob("*.pdf"))):
         files.append({"name": p.name, "indexed": p.name in indexed})
     return {"files": files, "total": len(files), "indexed": len(indexed)}
+
+
+@app.route("/docs/<filename>", methods=["DELETE"])
+def delete_doc(filename):
+    """Delete a document and remove its chunks from the index."""
+    safe_name = Path(filename).name
+    target_file = DOCS_DIR / safe_name
+    if target_file.exists():
+        target_file.unlink()
+    
+    records, _, _ = get_index()
+    filtered = [r for r in records if r["file"] != safe_name]
+    if len(filtered) != len(records):
+        INDEX_FILE.write_text(json.dumps(filtered), encoding="utf-8")
+        global _records, _idf, _avg_dl
+        _records = filtered
+        _idf, _avg_dl = build_bm25_index(_records)
+
+    return {"status": "ok", "message": f"{safe_name} deleted."}
 
 
 @app.route("/build", methods=["POST"])
@@ -1163,10 +1401,8 @@ def build():
     """Index new docs, streaming progress via SSE."""
     def generate():
         try:
-            if INDEX_FILE.exists():
-                records = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
-            else:
-                records = []
+            # Copy the in-memory index; swap the live one in only at the end.
+            records = list(get_index()[0])
             indexed_files = {r["file"] for r in records}
             new_count = 0
 
@@ -1225,19 +1461,17 @@ def build():
 
 @app.route("/models")
 def models():
-    """Return list of available Ollama models, excluding embedding models."""
-    EMBED_MODELS = {"nomic-embed-text-v2-moe", "embeddinggemma"}
-    try:
-        with urlopen(TAGS_URL) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        names = [
-            m["name"] for m in data.get("models", [])
-            if m["name"].split(":")[0] not in EMBED_MODELS
-        ]
-        return {"models": names, "default": CHAT_MODEL}
-    except Exception as e:
-        return {"models": [CHAT_MODEL], "default": CHAT_MODEL, "error": str(e)}
+    """Return the LiteRT model info."""
+    return {"models": [MODEL_NAME], "default": MODEL_NAME}
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    try:
+        app.run(host="0.0.0.0", port=5000)
+    finally:
+        # Give any in-flight sessions time to fully stop
+        time.sleep(3)
+        try:
+            _engine.close()
+        except BaseException:
+            pass

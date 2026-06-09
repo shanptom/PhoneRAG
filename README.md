@@ -1,8 +1,8 @@
-# phone-rag
+# PhoneRAG
 
-A lightweight Retrieval-Augmented Generation (RAG) system designed to run entirely on an Android phone using [Termux](https://termux.dev) and [Ollama](https://ollama.com). No cloud APIs, no heavy frameworks — just Python standard library and local LLMs.
+A lightweight Retrieval-Augmented Generation (RAG) system designed to run entirely on an Android phone using [Termux](https://termux.dev) and Google's [LiteRT-LM](https://ai.google.dev/edge/litert) with the Gemma 4 E2B model. No cloud APIs, no heavy frameworks — just Python, LiteRT, and on-device inference.
 
-Upload documents, build a vector index, and ask questions — all from a mobile-friendly web UI or the command line.
+Upload documents, build a keyword-based index, and ask questions — all from a mobile-friendly web UI or the command line.
 
 ## How It Works
 
@@ -11,41 +11,34 @@ Upload documents, build a vector index, and ask questions — all from a mobile-
                           |  docs/*.txt/pdf |
                           +--------+--------+
                                    |
-                          chunk + embed (batched)
+                          chunk + compute BM25 frequencies
                                    |
                                    v
                           +--------+--------+
-                          | index_nomic.json|
-                          | (vector store)  |
+                          | index_bm25.json |
+                          | (keyword store) |
                           +--------+--------+
                                    |
-          user query -----> embed query via Ollama
+          user query -----> BM25 term matching
+                                   |
+                                   v
+                             top-k chunks
                                    |
                                    v
                      +-------------+-------------+
-                     | hybrid search              |
-                     | (cosine sim + keyword boost)|
-                     +-------------+-------------+
-                                   |
-                            top-k chunks
-                                   |
-                                   v
-                     +-------------+-------------+
-                     | LLM generates answer       |
-                     | grounded in retrieved text  |
+                     | Gemma 4 generates answer  |
+                     | grounded in retrieved text|
+                     | using LiteRT-LM Engine    |
                      +-----------------------------+
 ```
 
 ### Pipeline
 
-1. **Ingest** — Reads documents from `~/phone-rag/docs/`, splits text into overlapping chunks (768 chars max, 96-char overlap) using recursive semantic splitting (paragraphs > sentences > clauses > words), generates embeddings in batches of 16 via Ollama, and stores everything in `index_nomic.json`.
+1. **Ingest** — Reads documents from `~/phone-rag/docs/`, splits text into overlapping chunks (768 chars max, 96-char overlap) using recursive semantic splitting (paragraphs > sentences > clauses > words), computes BM25 term frequencies, and stores everything in `index_bm25.json`. (No embedding model required!)
 
-2. **Retrieve** — Embeds the user's query with the same model, then scores every chunk using:
-   - **Semantic**: Cosine similarity (with pre-computed norms)
-   - **Lexical**: Stopword-filtered Jaccard keyword overlap (0.0-0.15 boost)
-   - **Broad query detection**: Queries like "summarize" or "overview" retrieve all chunks from the target file instead of top-k
+2. **Retrieve** — Scores every chunk against the user's query using standard BM25 ranking. Broad queries like "summarize" or "overview" bypass BM25 and retrieve all chunks from the target file instead of top-k.
 
-3. **Generate** — Feeds retrieved chunks into a prompt and streams the answer. If no chunk scores above the minimum threshold (0.28), it returns `NOT FOUND IN DOCUMENTS`.
+3. **Generate** — Feeds retrieved chunks into a prompt and streams the answer using the LiteRT-LM engine running Gemma 4 E2B. If no chunk scores above the minimum threshold, it returns `NOT FOUND IN DOCUMENTS`.
 
 ## Beginner Walkthrough
 
@@ -67,38 +60,19 @@ pkg update && pkg upgrade
 pkg install python git
 ```
 
-### Step 3: Install Ollama
+### Step 3: Get the Model
+
+Download the Gemma 4 E2B model formatted for LiteRT (`gemma-4-E2B-it.litertlm`) into a local directory (e.g., `~/models/`).
+
+### Step 4: Clone and Set Up
 
 ```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-Start the Ollama server (keep it running in the background):
-
-```bash
-ollama serve &
-```
-
-### Step 4: Pull the Models
-
-You need two models — one for understanding documents (embedding) and one for generating answers (chat):
-
-```bash
-ollama pull nomic-embed-text-v2-moe    # embedding model
-ollama pull gemma3:1b                   # chat model (small, fast)
-```
-
-These are small enough to run on most phones. The embedding model loads only when indexing/querying, then unloads to save RAM.
-
-### Step 5: Clone and Set Up
-
-```bash
-git clone <repo-url> ~/phone-rag
+git clone https://github.com/shanptom/PhoneRAG.git ~/phone-rag
 cd ~/phone-rag
-pip install pypdf flask
+pip install litert-lm-api flask pypdf --break-system-packages
 ```
 
-### Step 6: Add Your Documents
+### Step 5: Add Your Documents
 
 Place `.txt` or `.pdf` files into the `docs/` folder:
 
@@ -107,38 +81,33 @@ cp ~/storage/downloads/my-notes.txt ~/phone-rag/docs/
 cp ~/storage/downloads/report.pdf ~/phone-rag/docs/
 ```
 
-### Step 7: Launch the Web UI
+### Step 6: Launch the Web UI
 
 ```bash
-python app.py
+python3 app.py
 ```
 
 Open your phone's browser and go to `http://localhost:5000`.
 
-You'll see three tabs:
+You'll see three tabs (Docs drawer handles the Indexing):
+- **Ask Docs (RAG)** — Ask questions grounded in your documents
+- **Free Chat** — Talk directly to the AI (no document context)
+- **My Files** — Upload files and build the search index
 
-- **RAG** — Ask questions grounded in your documents
-- **Chat** — Talk directly to the AI (no document context)
-- **Index** — Upload files and build the search index
+### Step 7: Build Your Index
 
-### Step 8: Build Your Index
-
-1. Go to the **Index** tab
+1. Tap **My Files** to open the drawer
 2. Tap the upload area to add files (or you can put them in `docs/` manually)
-3. Tap **Build Index** and wait for it to finish — you'll see progress as each file is chunked and embedded
+3. Tap **Prepare Files for Search** and wait for it to finish — you'll see progress as each file is chunked and indexed
 
-### Step 9: Ask Questions
+### Step 8: Ask Questions
 
-Switch to the **RAG** tab and type a question. The system will:
-1. Find the most relevant chunks from your documents
+Type a question. The system will:
+1. Find the most relevant chunks from your documents using BM25
 2. Show you which sources it found
 3. Stream an answer grounded in those sources
 
 Try broad queries too — "summarize meeting.txt" will pull all chunks from that file.
-
-### Step 10: Direct Chat
-
-The **Chat** tab lets you talk to the model directly without any document context — useful for general questions, brainstorming, or quick calculations.
 
 ## CLI Usage
 
@@ -146,13 +115,10 @@ Prefer the terminal? The CLI tools are in the `cli/` folder:
 
 ```bash
 # Build the index
-python cli/build_index_nomic.py
+python3 cli/build_index.py
 
 # Ask a question (RAG)
-python cli/ask_nomic.py
-
-# Search only (no LLM generation)
-python cli/search.py
+python3 cli/ask.py
 ```
 
 ## Project Structure
@@ -161,13 +127,11 @@ python cli/search.py
 phone-rag/
 ├── app.py                      # Flask web UI (RAG + Chat + Index + Upload)
 ├── cli/
-│   ├── build_index_nomic.py    # CLI: chunk, embed, store
-│   ├── ask_nomic.py            # CLI: retrieve + generate
-│   └── search.py               # CLI: retrieval only
-├── legacy/                     # Older embeddinggemma-based scripts
+│   ├── build_index.py          # CLI: chunk and build BM25 index
+│   └── ask.py                  # CLI: retrieve + generate via LiteRT
+├── legacy/                     # Older Ollama/embeddinggemma-based scripts
 ├── docs/                       # Your source documents (.txt, .pdf)
-├── index_nomic.json            # Vector index (auto-generated)
-├── tech.md                     # Technical deep-dive
+├── index_bm25.json             # Keyword index (auto-generated)
 └── README.md
 ```
 
@@ -177,39 +141,32 @@ All configuration is via constants at the top of `app.py` (or the CLI scripts):
 
 | Parameter | Default | Description |
 |---|---|---|
-| `EMBED_MODEL` | `nomic-embed-text-v2-moe` | Ollama embedding model |
-| `CHAT_MODEL` | `gemma3:1b` | Ollama chat model |
+| `MODEL_PATH` | `/root/models/gemma-4-E2B-it.litertlm` | Path to your LiteRT model file |
 | `CHUNK_MAX` | `768` | Max characters per chunk |
 | `CHUNK_OVERLAP` | `96` | Character overlap between chunks |
-| `EMBED_BATCH_SIZE` | `16` | Chunks per embedding API call |
-| `MIN_SCORE` | `0.28` | Minimum score to attempt generation |
+| `MIN_SCORE` | `2.0` | Minimum BM25 score to attempt generation |
 | `MAX_BROAD_CHUNKS` | `25` | Max chunks for broad/summary queries |
-| `EMBED_KEEP_ALIVE` | `0` | Unload embedding model immediately |
-| `CHAT_KEEP_ALIVE` | `3600` | Keep chat model loaded for 1 hour |
 
 ### Memory Management
 
 Tuned for low-RAM devices:
-
-- The **embedding model** unloads immediately after use (`keep_alive: 0`) to free memory for the chat model.
-- The **chat model** stays loaded for 1 hour (`keep_alive: 3600`) so consecutive queries are fast.
-- Embeddings are processed in **batches of 16** to reduce API round-trips while keeping memory bounded.
+- By moving to BM25 retrieval, we eliminated the need to keep a separate Embedding model in memory.
+- `litert-lm-api` directly handles prompt templating and KV-cache management optimally for edge devices.
 
 ## Design Decisions
 
-- **Zero heavy dependencies** — Python stdlib (`json`, `math`, `re`, `pathlib`, `urllib`) plus `pypdf` and `flask`. No LangChain, no FAISS, no ChromaDB.
-- **JSON vector store** — Simple, portable, inspectable. Adequate for personal document collections.
-- **Hybrid retrieval** — Semantic search plus keyword boost to catch exact term matches that pure embedding similarity might miss.
-- **Pre-compiled regex & pre-computed norms** — Avoids redundant work on hot paths.
-- **Batched embeddings** — 16 chunks per API call instead of one-by-one, for faster indexing.
+- **Minimal Heavy Dependencies** — Only uses `litert-lm-api` for inference, `pypdf` for documents, and `flask` for UI. No LangChain, no FAISS, no ChromaDB.
+- **JSON keyword store** — Simple, portable, inspectable. Adequate for personal document collections.
+- **Pure BM25 retrieval** — Eliminates the need to download or run a second model just for embeddings.
+- **Pre-compiled regex** — Avoids redundant work on hot paths.
 - **Broad query detection** — Keyword heuristics detect summary/overview queries and retrieve entire files instead of top-k.
-- **Streaming output** — Answers stream token-by-token for responsive UX on slow hardware.
+- **Streaming output** — Answers stream token-by-token for responsive UX on slow hardware. The model is prompted for plain prose and the UI renders plain text (no external Markdown library), so nothing is fetched from the network.
 - **Grounded answers** — The prompt instructs the model to answer only from context and say "NOT FOUND" otherwise.
 
 ## Limitations
 
-- **Linear search** — Every query scans all chunks. Fine for small-to-medium collections, slow for tens of thousands of chunks.
-- **No document updates** — If a file changes, delete `index_nomic.json` and re-index.
+- **Linear search** — Every query scores all chunks via BM25. Fine for small-to-medium collections, slow for tens of thousands of chunks.
+- **No document updates** — If a file changes, delete `index_bm25.json` and re-index.
 - **Single-user** — Designed for personal use on one device.
 - **Context window limits** — Very large files may exceed the model's context window even with the 25-chunk cap for broad queries.
 
