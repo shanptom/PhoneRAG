@@ -2,3 +2,4 @@
 docs
 tech.md
 *.json
+__pycache__/

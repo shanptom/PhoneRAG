@@ -424,23 +424,31 @@ HTML = """\
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" content="#6366f1">
 <title>DocQ</title>
 <style>
   :root {
-    --bg: #0a0a0a;
-    --bg-raised: #141414;
-    --bg-input: #1a1a1a;
-    --border: #1e1e1e;
-    --border-focus: #2d8a54;
-    --accent: #22c55e;
-    --accent-dim: #166534;
-    --accent-glow: rgba(34,197,94,0.08);
-    --text: #e8e8e8;
-    --text-dim: #777;
-    --text-faint: #444;
-    --danger: #ef4444;
-    --warn: #eab308;
+    --bg: #f4f5fb;
+    --surface: #ffffff;
+    --surface-2: #f6f7fd;
+    --border: #e7e9f3;
+    --border-strong: #d7dae9;
+    --border-focus: #8b5cf6;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --accent-strong: #4f46e5;
+    --accent-grad: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    --accent-soft: #eef0ff;
+    --accent-glow: rgba(99,102,241,0.16);
+    --text: #1e1b2e;
+    --text-dim: #6b6f82;
+    --text-faint: #a6aaba;
+    --danger: #e11d48;
+    --danger-soft: #fff1f3;
+    --warn: #b45309;
+    --warn-soft: #fff7ed;
+    --shadow-sm: 0 1px 2px rgba(30,27,46,0.05), 0 1px 3px rgba(30,27,46,0.05);
+    --shadow-lg: 0 16px 40px rgba(79,70,229,0.16);
     --radius: 12px;
     --radius-lg: 16px;
   }
@@ -454,36 +462,36 @@ HTML = """\
 
   /* ── Header ── */
   header {
-    padding: 14px 16px 10px; text-align: center;
-    background: linear-gradient(180deg, #111 0%, var(--bg) 100%);
+    padding: 12px 16px; text-align: center;
+    background: var(--surface);
     border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
   }
-  .logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+  .logo { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
   .logo h1 {
-    font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em;
-    background: linear-gradient(135deg, var(--accent) 0%, #86efac 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em;
+    background: var(--accent-grad);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
   .logo .dot {
-    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
+    width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-glow);
     animation: pulse 2s ease-in-out infinite;
   }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
   /* ── Tabs ── */
-  .tabs { display: flex; gap: 4px; justify-content: center; }
+  .tabs { display: inline-flex; gap: 4px; justify-content: center; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; }
   .tabs button {
-    padding: 7px 18px; border: 1px solid var(--border); background: transparent;
-    color: var(--text-dim); font-size: 0.82rem; font-weight: 500;
-    cursor: pointer; transition: all 0.2s; border-radius: var(--radius);
-    letter-spacing: 0.02em; text-transform: uppercase;
+    padding: 8px 20px; border: none; background: transparent;
+    color: var(--text-dim); font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; border-radius: 999px;
+    letter-spacing: 0.01em;
   }
-  .tabs button:hover { color: var(--text); background: var(--bg-raised); }
+  .tabs button:hover { color: var(--text); }
   .tabs button.active {
-    background: var(--accent-dim); color: #fff;
-    border-color: var(--accent-dim);
-    box-shadow: 0 0 12px rgba(34,197,94,0.15);
+    background: var(--accent-grad); color: #fff;
+    box-shadow: 0 4px 12px var(--accent-glow);
   }
 
   /* ── Tab content ── */
@@ -492,61 +500,73 @@ HTML = """\
 
   /* ── Docs drawer (slide-up panel) ── */
   .drawer-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: none; position: fixed; inset: 0; background: rgba(30,27,46,0.35);
+    backdrop-filter: blur(2px);
     z-index: 90; transition: opacity 0.3s;
   }
   .drawer-overlay.open { display: block; }
   .drawer {
     position: fixed; bottom: 0; left: 0; right: 0;
-    background: var(--bg); border-top: 1px solid #252525;
-    border-radius: 18px 18px 0 0; z-index: 100;
+    background: var(--surface); border-top: 1px solid var(--border);
+    border-radius: 22px 22px 0 0; z-index: 100;
     max-height: 80dvh; overflow-y: auto;
     transform: translateY(100%); transition: transform 0.3s ease;
-    padding: 0 16px 20px;
+    padding: 0 16px 20px; box-shadow: var(--shadow-lg);
   }
   .drawer.open { transform: translateY(0); }
   .drawer-handle {
-    display: flex; justify-content: center; padding: 10px 0 6px;
-    cursor: pointer; position: sticky; top: 0; background: var(--bg); z-index: 1;
+    display: flex; justify-content: center; padding: 12px 0 8px;
+    cursor: pointer; position: sticky; top: 0; background: var(--surface); z-index: 1;
   }
   .drawer-handle::after {
-    content: ""; width: 36px; height: 4px; border-radius: 2px;
-    background: #333;
+    content: ""; width: 40px; height: 4px; border-radius: 2px;
+    background: var(--border-strong);
   }
   .drawer-header {
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 14px; padding-top: 4px;
   }
   .drawer-header h2 {
-    font-size: 1rem; font-weight: 600; color: var(--text);
+    font-size: 1.05rem; font-weight: 700; color: var(--text);
   }
   .drawer-close {
-    width: 30px; height: 30px; border-radius: 50%;
-    background: var(--bg-raised); border: 1px solid var(--border);
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--surface-2); border: 1px solid var(--border);
     color: var(--text-dim); font-size: 1.1rem; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: all 0.2s; line-height: 1;
   }
-  .drawer-close:hover { color: var(--text); border-color: #333; }
+  .drawer-close:hover { color: var(--text); border-color: var(--border-strong); background: #eef0f8; }
 
-  /* ── Model bar ── */
-  .model-bar {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 8px 16px; border-bottom: 1px solid var(--border);
-  }
-  .model-bar label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-  .model-bar select {
-    padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--bg-input); color: var(--text); font-size: 0.83rem;
-    outline: none; max-width: 200px; transition: border-color 0.2s;
-  }
-  .model-bar select:focus { border-color: var(--border-focus); }
   .btn-ghost {
-    padding: 5px 12px; font-size: 0.78rem; background: var(--bg-raised);
-    border: 1px solid var(--border); border-radius: 8px; color: var(--text-dim);
+    padding: 6px 14px; font-size: 0.78rem; font-weight: 600; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 999px; color: var(--text-dim);
     cursor: pointer; transition: all 0.2s;
   }
-  .btn-ghost:hover { color: var(--text); border-color: #333; }
+  .btn-ghost:hover { color: var(--accent-strong); border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ── Attach control ── */
+  .attach-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 50%; cursor: pointer;
+    background: var(--surface-2); border: 1px solid var(--border);
+    font-size: 1.05rem; transition: all 0.2s;
+  }
+  .attach-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .attach-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    max-width: 170px; padding: 5px 6px 5px 12px;
+    background: var(--accent-soft); color: var(--accent-strong);
+    border: 1px solid #dcdcfb; border-radius: 999px;
+    font-size: 0.78rem; font-weight: 600;
+  }
+  .attach-pill .pill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attach-pill .pill-x {
+    cursor: pointer; border: none; background: rgba(99,102,241,0.15); color: var(--accent-strong);
+    width: 18px; height: 18px; border-radius: 50%; font-size: 0.95rem; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0; flex: none;
+  }
+  .attach-pill .pill-x:hover { background: var(--accent); color: #fff; }
 
   /* ── Chat area (shared) ── */
   .chat-area {
@@ -554,81 +574,84 @@ HTML = """\
     display: flex; flex-direction: column; gap: 10px;
   }
   .msg {
-    max-width: 85%; padding: 10px 14px; border-radius: var(--radius-lg);
+    max-width: 85%; padding: 11px 15px; border-radius: var(--radius-lg);
     line-height: 1.55; font-size: 0.92rem; white-space: pre-wrap;
     word-wrap: break-word; animation: fadeIn 0.2s ease;
   }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .msg.user {
     align-self: flex-end;
-    background: linear-gradient(135deg, var(--accent-dim) 0%, #15803d 100%);
+    background: var(--accent-grad);
     border-bottom-right-radius: 4px; color: #fff;
+    box-shadow: 0 4px 14px var(--accent-glow);
   }
   .msg.bot {
     align-self: flex-start;
-    background: var(--bg-raised); border: 1px solid var(--border);
-    border-bottom-left-radius: 4px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px; box-shadow: var(--shadow-sm);
   }
   .msg.bot .sources {
-    font-size: 0.72rem; color: var(--text-dim); margin-bottom: 6px;
+    font-size: 0.72rem; color: var(--accent-strong); margin-bottom: 6px;
     padding-bottom: 6px; border-bottom: 1px solid var(--border);
-    letter-spacing: 0.01em;
+    letter-spacing: 0.01em; font-weight: 600;
   }
   .msg.error {
-    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
-    color: #fca5a5;
+    background: var(--danger-soft); border: 1px solid #fecdd3;
+    color: var(--danger);
   }
 
   /* ── Input bar ── */
   .input-bar {
-    display: flex; gap: 8px; padding: 10px 14px;
-    border-top: 1px solid var(--border); background: var(--bg);
+    display: flex; gap: 8px; padding: 12px 14px;
+    border-top: 1px solid var(--border); background: var(--surface);
   }
   .input-bar input {
-    flex: 1; padding: 11px 14px; border-radius: var(--radius); border: 1px solid var(--border);
-    background: var(--bg-input); color: var(--text); font-size: 0.95rem; outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
+    flex: 1; padding: 12px 15px; border-radius: var(--radius); border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font-size: 0.95rem; outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   }
+  .input-bar input::placeholder { color: var(--text-faint); }
   .input-bar input:focus {
-    border-color: var(--border-focus);
-    box-shadow: 0 0 0 3px var(--accent-glow);
+    border-color: var(--border-focus); background: var(--surface);
+    box-shadow: 0 0 0 4px var(--accent-glow);
   }
   .btn-send {
-    padding: 10px 16px; border-radius: var(--radius); border: none;
-    background: linear-gradient(135deg, var(--accent-dim) 0%, #15803d 100%);
+    padding: 10px 18px; border-radius: var(--radius); border: none;
+    background: var(--accent-grad);
     color: #fff; font-size: 0.92rem; font-weight: 600; cursor: pointer;
-    transition: opacity 0.2s, transform 0.1s;
+    transition: opacity 0.2s, transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px var(--accent-glow);
   }
-  .btn-send:hover { opacity: 0.9; }
+  .btn-send:hover { opacity: 0.95; }
   .btn-send:active { transform: scale(0.97); }
-  .btn-send:disabled { opacity: 0.35; }
-  .btn-stop { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); }
+  .btn-send:disabled { opacity: 0.4; box-shadow: none; }
+  .btn-stop { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); box-shadow: 0 4px 12px rgba(225,29,72,0.22); }
 
   /* ── Spinner ── */
   .spinner { display: inline-block; }
   .spinner::after {
     content: ""; display: inline-block; width: 14px; height: 14px;
-    border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%;
     animation: spin 0.6s linear infinite; vertical-align: middle; margin-left: 4px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .section-label {
-    font-size: 0.72rem; font-weight: 600; color: var(--text-dim);
+    font-size: 0.72rem; font-weight: 700; color: var(--text-dim);
     text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;
   }
 
   /* Upload */
   .upload-area {
-    border: 2px dashed #252525; border-radius: var(--radius-lg); padding: 24px 16px;
+    border: 2px dashed var(--border-strong); border-radius: var(--radius-lg); padding: 26px 16px;
     text-align: center; color: var(--text-dim); font-size: 0.88rem; cursor: pointer;
     margin-bottom: 16px; transition: all 0.25s;
-    background: var(--bg-raised);
+    background: var(--surface-2);
   }
-  .upload-area:hover { border-color: #333; color: var(--text); }
+  .upload-area:hover { border-color: var(--accent); color: var(--accent-strong); background: var(--accent-soft); }
   .upload-area.dragover {
-    border-color: var(--accent); color: var(--accent);
-    background: var(--accent-glow);
+    border-color: var(--accent); color: var(--accent-strong);
+    background: var(--accent-soft);
   }
   .upload-area input { display: none; }
   .upload-icon { font-size: 1.8rem; margin-bottom: 6px; display: block; }
@@ -640,49 +663,66 @@ HTML = """\
 
   /* Build button */
   .btn-build {
-    padding: 12px 18px; border-radius: var(--radius); border: none;
-    background: linear-gradient(135deg, var(--accent-dim) 0%, #15803d 100%);
-    color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    padding: 13px 18px; border-radius: var(--radius); border: none;
+    background: var(--accent-grad);
+    color: #fff; font-size: 0.95rem; font-weight: 700; cursor: pointer;
     width: 100%; transition: opacity 0.2s, transform 0.1s;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.01em; box-shadow: 0 6px 16px var(--accent-glow);
   }
-  .btn-build:hover { opacity: 0.9; }
+  .btn-build:hover { opacity: 0.95; }
   .btn-build:active { transform: scale(0.98); }
-  .btn-build:disabled { opacity: 0.35; }
+  .btn-build:disabled { opacity: 0.45; box-shadow: none; }
 
   /* File list */
   .file-list { margin: 16px 0 0; }
   .file-item {
-    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-    background: var(--bg-raised); border: 1px solid var(--border);
-    border-radius: var(--radius); margin-bottom: 6px;
-    font-size: 0.88rem; transition: border-color 0.2s;
+    display: flex; align-items: center; gap: 10px; padding: 11px 12px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); margin-bottom: 8px;
+    font-size: 0.88rem; transition: all 0.2s; box-shadow: var(--shadow-sm);
   }
-  .file-item:hover { border-color: #2a2a2a; }
+  .file-item:hover { border-color: var(--accent); transform: translateY(-1px); }
   .file-icon { font-size: 1.1rem; }
-  .file-item .name { flex: 1; color: var(--text); }
+  .file-item .name { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-item .status {
-    font-size: 0.7rem; font-weight: 600; padding: 2px 8px;
-    border-radius: 6px; text-transform: uppercase; letter-spacing: 0.04em;
+    font-size: 0.7rem; font-weight: 700; padding: 3px 9px;
+    border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
   }
-  .file-item .status.ready { background: rgba(34,197,94,0.12); color: var(--accent); }
-  .file-item .status.new { background: rgba(234,179,8,0.12); color: var(--warn); }
+  .file-item .status.ready { background: var(--accent-soft); color: var(--accent-strong); }
+  .file-item .status.new { background: var(--warn-soft); color: var(--warn); }
 
   /* Build log */
   #build-log {
-    margin-top: 12px; padding: 12px; background: #0c0c0c;
-    border: 1px solid var(--border); border-radius: var(--radius);
+    margin-top: 12px; padding: 14px; background: #1e1b2e;
+    border: 1px solid #2c2840; border-radius: var(--radius);
     font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-    font-size: 0.78rem; color: var(--text-dim);
+    font-size: 0.78rem; color: #c7c9e0;
     max-height: 250px; overflow-y: auto; white-space: pre-wrap;
     line-height: 1.6;
   }
 
   /* ── Scrollbar ── */
-  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #222; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #333; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #c3c7da; }
+
+  /* ── Attachments in chat ── */
+  .chat-img { max-width: 100%; border-radius: 12px; margin-bottom: 8px; display: block; }
+  .file-chip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; margin-bottom: 8px;
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 12px;
+  }
+  .file-chip .fc-icon {
+    width: 32px; height: 32px; flex: none; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.25); font-size: 1.05rem;
+  }
+  .file-chip .fc-meta { min-width: 0; line-height: 1.3; }
+  .file-chip .fc-name { font-weight: 700; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-chip .fc-sub { font-size: 0.72rem; opacity: 0.85; }
 
   /* ── Empty state ── */
   .empty-state {
@@ -690,8 +730,8 @@ HTML = """\
     justify-content: center; color: var(--text-faint); text-align: center;
     padding: 40px 20px; gap: 8px;
   }
-  .empty-state .icon { font-size: 2.5rem; margin-bottom: 4px; }
-  .empty-state .title { font-size: 0.95rem; color: var(--text-dim); font-weight: 500; }
+  .empty-state .icon { font-size: 2.5rem; margin-bottom: 4px; opacity: 0.9; }
+  .empty-state .title { font-size: 0.95rem; color: var(--text-dim); font-weight: 600; }
   .empty-state .hint { font-size: 0.8rem; }
 </style>
 </head>
@@ -721,12 +761,6 @@ HTML = """\
 
 <!-- Chat Tab -->
 <div id="tab-chat" class="tab-content">
-  <div class="model-bar" style="justify-content: flex-end; padding: 4px 16px;">
-    <button class="btn-ghost" onclick="clearChat()">Clear</button>
-    <label for="chat-img-input" style="cursor: pointer; margin-left: 8px; font-size: 1.1rem; padding: 4px;" title="Attach File">📎</label>
-    <input type="file" id="chat-img-input" accept="image/*,.txt" style="display: none;">
-    <span id="chat-img-name" style="font-size: 0.8rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; margin-left: 4px;"></span>
-  </div>
   <div id="direct-chat" class="chat-area">
     <div class="empty-state" id="chat-empty">
       <span class="icon">&#128172;</span>
@@ -734,7 +768,12 @@ HTML = """\
       <span class="hint">Chat freely — no documents needed</span>
     </div>
   </div>
-  <form id="chat-form" class="input-bar">
+  <div id="chat-attach" style="display: none; padding: 10px 14px 0;">
+    <span id="chat-img-name"></span>
+  </div>
+  <form id="chat-form" class="input-bar" style="align-items: center;">
+    <label for="chat-img-input" class="attach-btn" title="Attach file">📎</label>
+    <input type="file" id="chat-img-input" accept="image/*,.txt" style="display: none;">
     <input type="text" id="chat-q" placeholder="Type a message..." autocomplete="off">
     <button id="chat-btn" type="submit" class="btn-send">&#9654;</button>
   </form>
@@ -827,7 +866,7 @@ form.addEventListener("submit", async (e) => {
         } else if (payload.type === "stopped") {
           break;
         } else if (payload.type === "error") {
-          ansEl.innerHTML = '<span style="color:#f88">' + esc(payload.text) + '</span>';
+          ansEl.innerHTML = '<span style="color:var(--danger)">' + esc(payload.text) + '</span>';
         }
       }
     }
@@ -884,7 +923,7 @@ function loadDocs() {
   fetch("/docs").then(r => r.json()).then(data => {
     const el = document.getElementById("file-list");
     if (data.files.length === 0) {
-      el.innerHTML = '<div style="color:#888;padding:8px;">No files yet — add some above</div>';
+      el.innerHTML = '<div style="color:var(--text-dim);padding:8px;">No files yet — add some above</div>';
       return;
     }
     el.innerHTML = data.files.map(f => {
@@ -897,7 +936,7 @@ function loadDocs() {
       </div>`;
     }).join("");
   }).catch(err => {
-    document.getElementById("file-list").innerHTML = '<div style="color:#f88;">Failed to load docs</div>';
+    document.getElementById("file-list").innerHTML = '<div style="color:var(--danger);">Failed to load docs</div>';
   });
 }
 
@@ -962,15 +1001,26 @@ const chatInput = document.getElementById("chat-q");
 const chatBtn = document.getElementById("chat-btn");
 const chatImgInput = document.getElementById("chat-img-input");
 const chatImgName = document.getElementById("chat-img-name");
+const chatAttach = document.getElementById("chat-attach");
 let chatHistory = [];
 let pendingFileData = null;
 let pendingFileType = null;
 let pendingFileName = null;
 
+function clearAttach() {
+  chatImgInput.value = "";
+  chatImgName.innerHTML = "";
+  chatAttach.style.display = "none";
+  pendingFileData = null;
+  pendingFileType = null;
+  pendingFileName = null;
+}
+
 chatImgInput.addEventListener("change", () => {
   if (chatImgInput.files.length) {
     const file = chatImgInput.files[0];
-    chatImgName.textContent = file.name;
+    chatImgName.innerHTML = '<span class="attach-pill"><span class="pill-name">' + esc(file.name) + '</span><button type="button" class="pill-x" onclick="clearAttach()" title="Remove">&times;</button></span>';
+    chatAttach.style.display = "block";
     pendingFileName = file.name;
     const reader = new FileReader();
     
@@ -988,10 +1038,7 @@ chatImgInput.addEventListener("change", () => {
        reader.readAsDataURL(file);
     }
   } else {
-    chatImgName.textContent = "";
-    pendingFileData = null;
-    pendingFileType = null;
-    pendingFileName = null;
+    clearAttach();
   }
 });
 
@@ -1004,16 +1051,6 @@ function addChatMsg(role, html) {
   directChat.appendChild(d);
   directChat.scrollTop = directChat.scrollHeight;
   return d;
-}
-
-function clearChat() {
-  chatHistory = [];
-  directChat.innerHTML = "";
-  chatImgInput.value = "";
-  chatImgName.textContent = "";
-  pendingFileData = null;
-  pendingFileType = null;
-  pendingFileName = null;
 }
 
 let chatStreaming = false;
@@ -1031,12 +1068,9 @@ chatForm.addEventListener("submit", async (e) => {
   let finalContent = msg;
   
   if (pendingFileType === "image") {
-     userHtml = `<img src="${pendingFileData}" style="max-width: 100%; border-radius: 8px; margin-bottom: 8px;"><br>` + userHtml;
+     userHtml = `<img src="${pendingFileData}" class="chat-img">` + userHtml;
   } else if (pendingFileType === "text") {
-     userHtml = `<div style="padding:8px; background:rgba(0,0,0,0.2); border-radius:4px; margin-bottom:8px; font-size:0.85rem; border-left:3px solid var(--accent);">
-       <strong>📄 ${esc(pendingFileName)}</strong><br>
-       <div style="max-height:100px; overflow-y:auto; white-space:pre-wrap; margin-top:4px; color:var(--text-dim);">${esc(pendingFileData)}</div>
-     </div>` + userHtml;
+     userHtml = `<div class="file-chip"><div class="fc-icon">📄</div><div class="fc-meta"><div class="fc-name">${esc(pendingFileName)}</div><div class="fc-sub">Text attachment</div></div></div>` + userHtml;
      finalContent = msg + (msg ? "\\n\\n" : "") + "[Attached File: " + pendingFileName + "]\\n" + pendingFileData;
   }
 
@@ -1048,13 +1082,8 @@ chatForm.addEventListener("submit", async (e) => {
      msgObj.image = pendingFileData;
   }
   chatHistory.push(msgObj);
-  
-  // Clear pending file
-  chatImgInput.value = "";
-  chatImgName.textContent = "";
-  pendingFileData = null;
-  pendingFileType = null;
-  pendingFileName = null;
+
+  clearAttach();
 
   chatStreaming = true;
   chatBtn.innerHTML = '⏹';
@@ -1092,7 +1121,7 @@ chatForm.addEventListener("submit", async (e) => {
         } else if (payload.type === "stopped") {
           break;
         } else if (payload.type === "error") {
-          botDiv.innerHTML = '<span style="color:#f88">' + esc(payload.text) + '</span>';
+          botDiv.innerHTML = '<span style="color:var(--danger)">' + esc(payload.text) + '</span>';
         }
       }
     }
@@ -1143,13 +1172,13 @@ async function uploadFiles(files) {
     const resp = await fetch("/upload", { method: "POST", body: fd });
     const data = await resp.json();
     if (data.error) {
-      uploadStatus.innerHTML = '<span style="color:#f88">' + esc(data.error) + '</span>';
+      uploadStatus.innerHTML = '<span style="color:var(--danger)">' + esc(data.error) + '</span>';
     } else {
       uploadStatus.textContent = data.message;
       loadDocs();
     }
   } catch (err) {
-    uploadStatus.innerHTML = '<span style="color:#f88">Upload failed: ' + esc(err.message) + '</span>';
+    uploadStatus.innerHTML = '<span style="color:var(--danger)">Upload failed: ' + esc(err.message) + '</span>';
   }
 }
 </script>
