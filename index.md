@@ -277,4 +277,4 @@ The constraints force clarity.
 
 ---
 
-*Thanks for reading. Go build something small and offline.*
+*Thanks for reading.*
