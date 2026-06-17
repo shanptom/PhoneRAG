@@ -1,3 +1,8 @@
+---
+layout: default
+title: Home
+---
+
 # Building Local AI RAG on a Phone: The PhoneRAG Learning Experiment
 
 *How I built a complete Retrieval-Augmented Generation system that runs entirely offline on an Android phone — and what switching from embeddings to BM25 taught me.*
